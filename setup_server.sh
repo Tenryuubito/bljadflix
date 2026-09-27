@@ -41,13 +41,19 @@ sudo apt-get install -y \
 
 # 2. Firewall (iptables) konfigurieren
 echo -e "\n${YELLOW}[2/6] Konfiguriere Server-Firewall (Port 8000, 80, 443)...${NC}"
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 8000 -j ACCEPT
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
-sudo netfilter-persistent save
+sudo iptables -I INPUT -p tcp --dport 8000 -j ACCEPT
+sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT
+sudo iptables -I INPUT -p tcp --dport 443 -j ACCEPT
+sudo netfilter-persistent save || true
+
+if command -v ufw >/dev/null 2>&1; then
+    sudo ufw allow 8000/tcp || true
+    sudo ufw allow 80/tcp || true
+    sudo ufw allow 443/tcp || true
+fi
 
 # 3. Pfade und Ordner vorbereiten
-INSTALL_DIR="/home/$USER/bljadflix"
+INSTALL_DIR="$HOME/bljadflix"
 echo -e "\n${YELLOW}[3/6] Richte Projektverzeichnis ein unter: ${INSTALL_DIR}${NC}"
 
 mkdir -p "$INSTALL_DIR"
