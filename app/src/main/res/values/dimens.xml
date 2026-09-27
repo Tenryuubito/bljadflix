@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- TV Safe Margins (Overscan Standard) -->
+    <dimen name="tv_margin_horizontal">48dp</dimen>
+    <dimen name="tv_margin_vertical">27dp</dimen>
+
+    <!-- Standard Paddings & Spacings -->
+    <dimen name="padding_xsmall">4dp</dimen>
+    <dimen name="padding_small">8dp</dimen>
+    <dimen name="padding_medium">12dp</dimen>
+    <dimen name="padding_large">16dp</dimen>
+    <dimen name="padding_xlarge">24dp</dimen>
+    <dimen name="padding_xxlarge">32dp</dimen>
+    <dimen name="padding_huge">48dp</dimen>
+
+    <!-- Corner Radii for Modern Rounded UI -->
+    <dimen name="radius_small">8dp</dimen>
+    <dimen name="radius_medium">12dp</dimen>
+    <dimen name="radius_large">16dp</dimen>
+    <dimen name="radius_xlarge">20dp</dimen>
+    <dimen name="radius_pill">32dp</dimen>
+
+    <!-- Elevating Focus Depths -->
+    <dimen name="card_elevation">4dp</dimen>
+    <dimen name="focus_elevation">12dp</dimen>
+
+    <!-- Component Dimensions -->
+    <dimen name="sidebar_width">240dp</dimen>
+    <dimen name="poster_detail_width">320dp</dimen>
+    <dimen name="poster_detail_height">480dp</dimen>
+    <dimen name="splash_logo_size">160dp</dimen>
+    <dimen name="splash_progress_width">450dp</dimen>
+    <dimen name="splash_progress_height">12dp</dimen>
+
+    <!-- 10-Foot UI Typography -->
+    <dimen name="text_caption">14sp</dimen>
+    <dimen name="text_body_small">16sp</dimen>
+    <dimen name="text_body">18sp</dimen>
+    <dimen name="text_subtitle">20sp</dimen>
+    <dimen name="text_title">24sp</dimen>
+    <dimen name="text_header">32sp</dimen>
+    <dimen name="text_display">48sp</dimen>
+    <dimen name="text_hero">56sp</dimen>
+</resources>

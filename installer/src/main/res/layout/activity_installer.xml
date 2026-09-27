@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_dark"
+    android:orientation="vertical"
+    android:padding="48dp"
+    android:gravity="center_horizontal">
+
+    <TextView
+        android:id="@+id/tv_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/installer_title"
+        android:textColor="@color/accent_gold"
+        android:textSize="28sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tv_subtitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/installer_subtitle"
+        android:textColor="@color/text_muted"
+        android:textSize="16sp" />
+
+    <!-- Status Card -->
+    <LinearLayout
+        android:layout_width="600dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:background="@color/card_dark"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:id="@+id/tv_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/status_checking"
+            android:textColor="@color/text_white"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tv_version_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/text_muted"
+            android:textSize="14sp" />
+
+        <ProgressBar
+            android:id="@+id/progress_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="12dp"
+            android:layout_marginTop="16dp"
+            android:indeterminate="true"
+            android:visibility="visible" />
+
+    </LinearLayout>
+
+    <!-- Login Container -->
+    <LinearLayout
+        android:id="@+id/layout_login"
+        android:layout_width="600dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:background="@color/card_dark"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:visibility="gone">
+
+        <EditText
+            android:id="@+id/et_username"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:hint="Benutzername"
+            android:textColorHint="@color/text_muted"
+            android:textColor="@color/text_white"
+            android:background="#222C3A"
+            android:paddingHorizontal="16dp"
+            android:focusable="true"
+            android:inputType="text" />
+
+        <EditText
+            android:id="@+id/et_password"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="12dp"
+            android:hint="Passwort"
+            android:textColorHint="@color/text_muted"
+            android:textColor="@color/text_white"
+            android:background="#222C3A"
+            android:paddingHorizontal="16dp"
+            android:focusable="true"
+            android:inputType="textPassword" />
+
+        <Button
+            android:id="@+id/btn_login"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="16dp"
+            android:text="@string/btn_login"
+            android:textColor="@color/text_white"
+            android:focusable="true" />
+    </LinearLayout>
+
+    <!-- Action Buttons -->
+    <LinearLayout
+        android:layout_width="600dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btn_primary"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="@string/btn_install_update"
+            android:textColor="@color/text_white"
+            android:focusable="true"
+            android:enabled="false" />
+
+        <Button
+            android:id="@+id/btn_retry"
+            android:layout_width="wrap_content"
+            android:layout_height="52dp"
+            android:layout_marginStart="16dp"
+            android:text="@string/btn_retry"
+            android:textColor="@color/text_white"
+            android:focusable="true" />
+
+    </LinearLayout>
+
+</LinearLayout>

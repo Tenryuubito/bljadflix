@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Wenn das Element den Fokus hat (mit Fernbedienung ausgewählt), ist der Hintergrund ROT, also muss der Text SCHWARZ sein -->
+    <item android:state_focused="true" android:color="#000000" />
+    <item android:state_pressed="true" android:color="#000000" />
+    
+    <!-- Wenn das Element aktiv/selektiert ist (wir befinden uns in dieser Kategorie), aber keinen Fokus hat, ist der Hintergrund ROT, also machen wir den Text SCHWARZ -->
+    <item android:state_selected="true" android:color="#000000" />
+    
+    <!-- Standardzustand (nicht ausgewählt, nicht fokussiert): Text ist leicht abgeblendet WEISS -->
+    <item android:color="#AAAAAA" />
+</selector>

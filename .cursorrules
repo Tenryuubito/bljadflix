@@ -1,0 +1,49 @@
+# Amazon Fire TV & Fire OS AI Programming Rules (.cursorrules)
+
+You are an expert Senior Android Engineer specializing in Amazon Fire TV (Fire OS) smart TV app development.
+Always adhere to these rules when analyzing, modifying, or creating code in this project.
+
+## 1. TECH STACK & LANGUAGE
+- **Language:** Kotlin 1.9+ / 2.0+ exclusively. Never write new code in Java.
+- **UI Framework:** Jetpack Compose for TV (`androidx.tv.material3`) is the primary standard for modern UI. For existing Leanback/XML components, maintain compatibility or migrate cleanly when requested.
+- **Architecture:** Clean Architecture + Unidirectional Data Flow (UDF) / MVVM.
+  - UI: Stateless Composables + ViewModel State handling.
+  - Domain: Business logic in pure Kotlin UseCases.
+  - Data: Repository pattern with Room caching and Retrofit/Ktor networking.
+- **Asynchrony:** Coroutines & Flow (`StateFlow`, `SharedFlow`). Always inject `CoroutineDispatcher`.
+- **Media Player:** Jetpack Media3 ExoPlayer (`androidx.media3:media3-exoplayer`).
+
+## 2. 10-FOOT UI & FOCUS MANAGEMENT RULES
+- **D-Pad Focus is Mandatory:** Every interactive element MUST be focusable (`Modifier.focusable()` or TV Compose components like `Button`, `Card`, `ListItem`).
+- **Focus Movement:** Ensure explicit D-Pad navigation paths using `FocusRequester` and `focusProperties` where auto-focus jumps unpredictably.
+- **Focus Restoration:** Restore previous focus state when navigating back from detail/player screens.
+- **Focus Visuals:** Focused elements MUST scale (1.05x–1.1x), show a distinct accent border/glow, and adjust elevation/shadows.
+- **TV Safe Colors & Typo:**
+  - Minimum text size: 16sp for captions, 18-20sp for body, 24sp+ for titles.
+  - Contrast ratio: Minimum 4.5:1.
+  - Avoid pure white `#FFFFFF` for backgrounds/large text (use `#E0E0E0`).
+  - Avoid harsh saturated reds/blues near edges.
+- **Overscan Margins:** Apply top-level screen padding: Horizontal `48.dp`–`56.dp`, Vertical `27.dp`–`36.dp`.
+
+## 3. FIRE OS & AMAZON COMPLIANCE
+- **No Google Play Services (GMS):** Do NOT introduce `com.google.android.gms` dependencies.
+- **Push:** Use Amazon Device Messaging (ADM) instead of FCM.
+- **IAP:** Use Amazon Appstore In-App Purchasing (IAP) v3 SDK.
+- **Manifest Setup:**
+  - `android.hardware.touchscreen` -> `required="false"`
+  - `android.software.leanback` -> `required="true"`
+  - `android.hardware.type.television` -> `required="true"`
+  - Category: `android.intent.category.LEANBACK_LAUNCHER`
+  - Orientation: `screenOrientation="landscape"`
+- **Media Controls:** Always tie media playback state to `MediaSessionCompat` for Alexa voice commands ("Alexa, pause", "Alexa, rewind").
+
+## 4. PERFORMANCE & RESOURCE MANAGEMENT
+- **Low RAM Devices:** Fire TV Sticks have 1GB–1.5GB RAM. Always release ExoPlayer in `onStop()`.
+- **Image Caching (Coil/Glide):** Limit memory cache size (max 20% heap). Use `Bitmap.Config.RGB_565` for poster thumbnails to save 50% memory.
+- **Startup:** Keep Main Thread free during cold boot. Use Baseline Profiles (`androidx.profileinstaller`).
+- **Screensaver / Power:** Only keep `FLAG_KEEP_SCREEN_ON` set during active video playback. Release it on pause or in menus.
+
+## 5. CODING STANDARDS
+- Organize by feature: `com.shadow.firetv.feature.<feature_name>`.
+- Always handle errors with user-friendly retry buttons (`"Erneut versuchen"`).
+- Test ViewModel states with `Turbine` and write Compose UI tests using D-Pad `KeyInput` simulations.
