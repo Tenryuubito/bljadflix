@@ -32,7 +32,6 @@
         <item quantity="one">%d Folge</item>
         <item quantity="other">%d Folgen</item>
     </plurals>
-    <string name="episodes_episode_info">Staffel %1$s, Folge %2$s%3$s</string>
 
     <string name="title_settings">Einstellungen</string>
     <string name="btn_trigger_indexer">Katalog / Indexer manuell starten</string>

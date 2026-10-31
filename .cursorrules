@@ -5,7 +5,7 @@ Always adhere to these rules when analyzing, modifying, or creating code in this
 
 ## 1. TECH STACK & LANGUAGE
 - **Language:** Kotlin 1.9+ / 2.0+ exclusively. Never write new code in Java.
-- **UI Framework:** Android XML Views (AppCompat, RecyclerView, ViewBinding). Do not introduce Jetpack Compose unless a migration is explicitly requested.
+- **UI Framework:** Jetpack Compose for TV (`androidx.tv:tv-material`) with `BljadflixTheme`. Do not add new XML layouts.
 - **Architecture:** MVVM + Unidirectional Data Flow.
   - UI: Activities render a single `UiState` from the ViewModel and react to one-off events.
   - Data: `MovieRepository` (Retrofit + Gson) returning `Result<T>`. There is no local database cache.
@@ -16,7 +16,7 @@ Always adhere to these rules when analyzing, modifying, or creating code in this
 
 ## 2. 10-FOOT UI & FOCUS MANAGEMENT RULES
 - **D-Pad Focus is Mandatory:** Every interactive element MUST be focusable (`android:focusable="true"` / `isFocusable = true`).
-- **Focus Movement:** Ensure explicit D-Pad navigation paths using `setOnKeyListener`, `nextFocus*` attributes or `requestFocus()` where auto-focus jumps unpredictably.
+- **Focus Movement:** Ensure explicit D-Pad navigation paths using `FocusRequester`, `focusRestorer()`, `focusProperties` or `onPreviewKeyEvent` where auto-focus jumps unpredictably.
 - **Focus Restoration:** Restore previous focus state when navigating back from detail/player screens.
 - **Focus Visuals:** Focused elements MUST scale (1.05x–1.1x), show a distinct accent border/glow, and adjust elevation/shadows.
 - **TV Safe Colors & Typo:**

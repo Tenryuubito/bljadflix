@@ -12,9 +12,9 @@ Dieses Dokument definiert die verbindlichen Architektur-Richtlinien, UX/UI-Regel
 - Aktiviere die **Explicit API Mode** Policy für Multi-Module-Projekte, um klare Modulgrenzen zu erzwingen.
 - **Verbot von Java-Code** in allen neuen Modulen.
 
-### 1.2 UI-Framework: Android XML Views
-- **Standard in diesem Projekt:** Klassische Android Views (AppCompat, RecyclerView, ViewBinding) mit XML-Layouts.
-- Jetpack Compose for TV wird nur eingeführt, wenn eine Migration ausdrücklich gewünscht ist.
+### 1.2 UI-Framework: Jetpack Compose for TV
+- **Standard in diesem Projekt:** Jetpack Compose mit `androidx.tv:tv-material` (Cards, Surfaces, Buttons, TabRow). Keine neuen XML-Layouts.
+- Theme und Farben kommen aus `BljadflixTheme`, feste Farben aus `BljadflixColors`. Farben nicht direkt in Screens hartkodieren, wenn es dafür ein Token gibt.
 
 ### 1.3 Architektur
 - **MVVM + Unidirectional Data Flow**
@@ -36,7 +36,7 @@ Dieses Dokument definiert die verbindlichen Architektur-Richtlinien, UX/UI-Regel
 
 ### 2.1 Focus Management & D-Pad Navigation
 - **Regel 1 (Keine Touch-Annahmen):** Es gibt keinen Touchscreen! Jedes interaktive Element **MUSS** fokussierbar sein (`android:focusable="true"` bzw. `isFocusable = true`).
-- **Regel 2 (Explizite Focus-Pfade):** Bei komplexen Verschachtelungen (z. B. Sidebar neben einem Grid) nutze `setOnKeyListener`, `nextFocus*`-Attribute und gezieltes `requestFocus()`, um unvorhersehbares D-Pad-Springen zu verhindern.
+- **Regel 2 (Explizite Focus-Pfade):** Bei komplexen Verschachtelungen (z. B. Sidebar neben einem Grid) nutze `FocusRequester`, `focusRestorer()`, `focusProperties` und `onPreviewKeyEvent`, um unvorhersehbares D-Pad-Springen zu verhindern.
 - **Regel 3 (Focus Restoring):** Wenn der Benutzer von einem Detail-Screen oder Suchmenü zurücknavigiert, **MUSS** der vorherige Fokus-Zustand exakt wiederhergestellt werden (z. B. über die gespeicherte Auswahl im ViewModel-State).
 - **Regel 4 (D-Pad-Eingaben abfangen):** Verarbeite KeyEvents für D-Pad-Tasten (`KEYCODE_DPAD_UP`, `DOWN`, `LEFT`, `RIGHT`, `CENTER`) präzise. Die `KEYCODE_BACK`-Taste **MUSS** Dialoge, Overlays oder Player-Controls konsistent schließen, bevor sie die App verlässt.
 
@@ -167,4 +167,4 @@ com.shadow.firetv/
 
 ### 5.3 Testing-Strategie
 - **Unit Tests:** Teste ViewModels und Repositories mit JUnit 4, MockK und `Turbine` (für Flow-Testing). Der Main-Dispatcher wird über `MainDispatcherRule` ersetzt.
-- **D-Pad-Navigation:** Fokuspfade bei Änderungen an Adaptern oder Layouts manuell auf dem Gerät bzw. Emulator prüfen.
+- **D-Pad-Navigation:** Fokuspfade bei Änderungen an Screens manuell auf dem Gerät bzw. Emulator prüfen.

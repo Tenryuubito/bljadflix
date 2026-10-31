@@ -1,21 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primary">#E50914</color>
-
     <color name="background_dark">#0A0A10</color>
-    <color name="sidebar_bg">#12121B</color>
     <color name="card_bg_elevated">#222234</color>
-    <color name="button_secondary">#28283A</color>
-    <color name="skeleton">#26263A</color>
-
-    <color name="text_primary">#FFFFFF</color>
-    <color name="text_secondary">#B5B5CA</color>
-    <color name="text_muted">#7A7A94</color>
     <color name="text_hint">#505068</color>
-
-    <color name="accent_gold">#FFD700</color>
-    <color name="accent_blue">#0088FF</color>
-    <color name="accent_purple">#8A2BE2</color>
-
-    <color name="splash_bg">#CC0000</color>
 </resources>
