@@ -1,172 +1,220 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_radial_dark"
-    android:orientation="horizontal"
-    android:padding="@dimen/tv_margin_horizontal"
-    android:clipChildren="false"
-    android:clipToPadding="false">
+    android:background="@drawable/bg_radial_dark">
 
-    <FrameLayout
-        android:layout_width="300dp"
-        android:layout_height="450dp"
-        android:layout_marginEnd="40dp"
-        android:background="@drawable/bg_card_setting"
-        android:elevation="12dp">
-
-        <com.google.android.material.imageview.ShapeableImageView
-            android:id="@+id/iv_cover"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="centerCrop"
-            android:background="@color/card_bg_elevated"
-            app:shapeAppearanceOverlay="@style/ShapeAppearance.MaterialComponents.MediumComponent"
-            android:contentDescription="Serien Cover" />
-    </FrameLayout>
-
-    <androidx.core.widget.NestedScrollView
-        android:layout_width="0dp"
+    <ImageView
+        android:id="@+id/iv_backdrop"
+        android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_weight="1"
+        android:alpha="0.22"
+        android:importantForAccessibility="no"
+        android:scaleType="centerCrop" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_detail_scrim" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:clipChildren="false"
         android:clipToPadding="false"
-        android:fillViewport="true">
+        android:orientation="horizontal"
+        android:paddingHorizontal="@dimen/tv_margin_horizontal"
+        android:paddingTop="@dimen/tv_margin_vertical">
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
+        <FrameLayout
+            android:layout_width="250dp"
+            android:layout_height="375dp"
+            android:layout_marginEnd="40dp"
+            android:background="@drawable/bg_card_setting"
+            android:elevation="12dp">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/iv_cover"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/card_bg_elevated"
+                android:contentDescription="Serien Cover"
+                android:scaleType="centerCrop"
+                app:shapeAppearanceOverlay="@style/ShapeAppearance.MaterialComponents.MediumComponent" />
+        </FrameLayout>
+
+        <androidx.core.widget.NestedScrollView
+            android:id="@+id/scroll_detail"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
             android:clipChildren="false"
-            android:clipToPadding="false">
-
-            <TextView
-                android:id="@+id/tv_title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="@color/text_primary"
-                android:textSize="48sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/tv_description"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:maxLines="5"
-                android:ellipsize="end"
-                android:textColor="@color/text_secondary"
-                android:lineSpacingExtra="4dp"
-                android:textSize="20sp" />
+            android:clipToPadding="false"
+            android:fillViewport="true"
+            android:paddingBottom="@dimen/tv_margin_vertical">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:clipChildren="false"
+                android:clipToPadding="false"
                 android:orientation="vertical"
-                android:layout_marginTop="20dp"
-                android:clipChildren="false">
+                android:paddingHorizontal="8dp">
+
+                <TextView
+                    android:id="@+id/tv_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:textColor="@color/text_primary"
+                    android:textSize="40sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tv_meta"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/text_muted"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tv_description"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:ellipsize="end"
+                    android:lineSpacingExtra="4dp"
+                    android:maxLines="4"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="18sp" />
 
                 <Button
                     android:id="@+id/btn_continue_watching"
                     style="@style/TvButtonStyle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="22dp"
                     android:background="@drawable/bg_input_selector"
                     android:backgroundTint="@color/primary"
                     android:drawableStart="@drawable/ic_play"
                     android:drawablePadding="12dp"
+                    android:gravity="start|center_vertical"
                     android:textColor="@color/text_primary"
                     android:textSize="18sp"
                     android:textStyle="bold"
                     android:visibility="gone" />
 
-                <Button
-                    android:id="@+id/btn_watchlist_toggle"
-                    style="@style/TvButtonStyle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:background="@drawable/bg_input_selector"
-                    android:backgroundTint="@color/button_secondary"
-                    android:drawableStart="@drawable/ic_star_outline"
-                    android:drawablePadding="12dp"
-                    android:textColor="@color/text_primary"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:text="@string/btn_watchlist_add" />
-
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:orientation="horizontal"
+                    android:clipChildren="false"
                     android:gravity="center_vertical"
-                    android:clipChildren="false">
+                    android:orientation="horizontal">
 
                     <Button
-                        android:id="@+id/btn_reindex"
+                        android:id="@+id/btn_watchlist_toggle"
                         style="@style/TvButtonStyle"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:background="@drawable/bg_input_selector"
                         android:backgroundTint="@color/button_secondary"
-                        android:drawableStart="@drawable/ic_sync"
-                        android:drawablePadding="12dp"
+                        android:drawableStart="@drawable/ic_star_outline"
+                        android:drawablePadding="10dp"
+                        android:ellipsize="end"
+                        android:gravity="start|center_vertical"
+                        android:maxLines="1"
+                        android:text="@string/btn_watchlist_add"
                         android:textColor="@color/text_primary"
-                        android:textSize="18sp"
-                        android:textStyle="bold"
-                        android:text="@string/btn_reindex" />
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <Button
+                        android:id="@+id/btn_reindex"
+                        style="@style/TvButtonStyle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/bg_input_selector"
+                        android:backgroundTint="@color/button_secondary"
+                        android:drawableStart="@drawable/ic_sync"
+                        android:drawablePadding="10dp"
+                        android:ellipsize="end"
+                        android:gravity="start|center_vertical"
+                        android:maxLines="1"
+                        android:text="@string/btn_reindex"
+                        android:textColor="@color/text_primary"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
 
                     <ProgressBar
                         android:id="@+id/progress_reindex"
-                        android:layout_width="28dp"
-                        android:layout_height="28dp"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
                         android:layout_marginStart="12dp"
                         android:indeterminateTint="@color/text_primary"
                         android:visibility="gone" />
                 </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tv_seasons_header"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="30dp"
+                    android:text="@string/detail_seasons_header"
+                    android:textColor="@color/text_muted"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+
+                <com.shadow.firetv.core.ui.TabRowRecyclerView
+                    android:id="@+id/rv_seasons"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:paddingVertical="6dp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/tv_season_progress"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="16sp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/tv_episodes_message"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:textColor="@color/text_muted"
+                    android:textSize="18sp"
+                    android:visibility="gone" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rv_episodes"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:nestedScrollingEnabled="false" />
+
             </LinearLayout>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Staffel auswählen:"
-                android:textColor="@color/text_muted"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:layout_marginTop="32dp" />
-
-            <Spinner
-                android:id="@+id/spinner_seasons"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="@drawable/bg_spinner_selector"
-                android:popupBackground="#161622"
-                android:minHeight="48dp" />
-
-            <TextView
-                android:id="@+id/tv_episodes_message"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:textColor="@color/text_muted"
-                android:textSize="18sp"
-                android:visibility="gone" />
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/rv_episodes"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:nestedScrollingEnabled="false"
-                android:clipChildren="false"
-                android:clipToPadding="false" />
-
-        </LinearLayout>
-    </androidx.core.widget.NestedScrollView>
+        </androidx.core.widget.NestedScrollView>
+    </LinearLayout>
 
     <ProgressBar
         android:id="@+id/progress_bar"
@@ -176,4 +224,4 @@
         android:indeterminateTint="@color/primary"
         android:visibility="gone" />
 
-</LinearLayout>
+</FrameLayout>
