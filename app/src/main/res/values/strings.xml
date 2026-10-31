@@ -5,6 +5,15 @@
     <string name="login_username">Benutzername</string>
     <string name="login_password">Passwort</string>
     <string name="login_submit">Anmelden</string>
+    <string name="main_title_continue">Weiterschauen</string>
+    <string name="main_title_watchlist">Meine Watchlist</string>
+    <string name="main_title_all">Alle Serien</string>
+    <string name="main_title_search">Suche: „%1$s“</string>
+    <string name="main_settings">Einstellungen</string>
+    <string name="main_search_hint">Suchen…</string>
+    <string name="main_genres_header">GENRES</string>
+    <string name="main_end_of_list">Keine weiteren Serien verfügbar.</string>
+    <string name="main_continue_episode">Staffel %1$d · Folge %2$d%3$s</string>
 
 
     <string name="btn_watchlist_add">Zur Watchlist hinzufügen</string>
