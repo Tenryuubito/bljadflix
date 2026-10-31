@@ -468,6 +468,19 @@ class PlayerActivity : AppCompatActivity() {
         )
     }
 
+    private fun pauseVideo() {
+        webView.evaluateJavascript(
+            """
+            window.__userHasPaused = true;
+            var v = document.querySelector('video');
+            if (v) v.pause();
+            try {
+                if (!v && typeof jwplayer === 'function') jwplayer().pause(true);
+            } catch(e) {}
+        """.trimIndent(), null
+        )
+    }
+
     private fun togglePlayPause() {
         webView.evaluateJavascript(
             """
@@ -580,6 +593,17 @@ class PlayerActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         viewModel.saveProgress()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        webView.onResume()
+    }
+
+    override fun onStop() {
+        pauseVideo()
+        webView.onPause()
+        super.onStop()
     }
 
     override fun onDestroy() {
