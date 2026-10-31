@@ -8,7 +8,7 @@ class MovieResponse(BaseModel):
     cover_url: str
     source_page_url: str
     genre: str = ""
-    source: Optional[str] = "aniworld"
+    source: Optional[str] = None
 
 class StreamResponse(BaseModel):
     stream_url: str

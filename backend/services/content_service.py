@@ -18,13 +18,17 @@ class ContentService:
     def __init__(self, db: DatabaseManager):
         self.db = db
 
+    @staticmethod
+    def _with_source(rows, source: str) -> List[Dict]:
+        return [{**dict(row), "source": source} for row in rows]
+
     def get_movies(self, source: Optional[str] = "aniworld", page: int = 1, limit: int = 20) -> List[Dict]:
         clean_source = self.db.sanitize_source(source)
         offset = (page - 1) * limit
         with self.db.get_content_connection(clean_source, row_factory=True) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM content_index LIMIT ? OFFSET ?", (limit, offset))
-            return [dict(row) for row in cursor.fetchall()]
+            return self._with_source(cursor.fetchall(), clean_source)
 
     def get_genres(self, source: Optional[str] = "aniworld") -> List[str]:
         clean_source = self.db.sanitize_source(source)
@@ -49,7 +53,7 @@ class ContentService:
                 cursor.execute("SELECT * FROM content_index LIMIT ? OFFSET ?", (limit, offset))
             else:
                 cursor.execute("SELECT * FROM content_index WHERE genre LIKE ? LIMIT ? OFFSET ?", (f"%{genre_name}%", limit, offset))
-            return [dict(row) for row in cursor.fetchall()]
+            return self._with_source(cursor.fetchall(), clean_source)
 
     def search_movies(self, source: Optional[str] = "aniworld", query: str = "", genre: str = "", page: int = 1, limit: int = 20) -> List[Dict]:
         clean_source = self.db.sanitize_source(source)
@@ -69,7 +73,7 @@ class ContentService:
             sql += " LIMIT ? OFFSET ?"
             params.extend([limit, offset])
             cursor.execute(sql, tuple(params))
-            return [dict(row) for row in cursor.fetchall()]
+            return self._with_source(cursor.fetchall(), clean_source)
 
     def log_search(self, user_id: int, source: Optional[str] = "aniworld", query: str = "", genre: str = "", results_count: int = 0):
         if not query and not genre:
