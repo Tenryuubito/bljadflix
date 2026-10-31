@@ -45,8 +45,46 @@ class TestBackendReindex(unittest.TestCase):
         mock_bg_tasks.add_task.assert_called_once_with(
             app_backend.indexer_service.process_single_series_background,
             "https://aniworld.to/anime/stream/test-anime",
-            "aniworld"
+            "aniworld",
+            True
         )
+
+
+class TestSeriesRefreshThrottle(unittest.TestCase):
+
+    def setUp(self):
+        self.service = app_backend.indexer_service
+        self.service.last_refreshed.clear()
+        self.url = "https://aniworld.to/anime/stream/drossel-test"
+
+    @patch.object(app_backend.indexer_service, 'process_single_series')
+    def test_background_refresh_is_throttled(self, mock_process):
+        mock_process.return_value = (self.url, True, "ok")
+
+        self.service.process_single_series_background(self.url, "aniworld")
+        self.service.process_single_series_background(self.url, "aniworld")
+
+        self.assertEqual(mock_process.call_count, 1)
+
+    @patch.object(app_backend.indexer_service, 'process_single_series')
+    def test_forced_refresh_ignores_throttle(self, mock_process):
+        mock_process.return_value = (self.url, True, "ok")
+
+        self.service.process_single_series_background(self.url, "aniworld")
+        self.service.process_single_series_background(self.url, "aniworld", True)
+
+        self.assertEqual(mock_process.call_count, 2)
+
+    @patch("services.indexer_service.time.time")
+    @patch.object(app_backend.indexer_service, 'process_single_series')
+    def test_refresh_runs_again_after_interval(self, mock_process, mock_time):
+        mock_process.return_value = (self.url, True, "ok")
+        mock_time.return_value = 1000.0
+        self.service.process_single_series_background(self.url, "aniworld")
+        mock_time.return_value = 1000.0 + 6 * 3600 + 1
+        self.service.process_single_series_background(self.url, "aniworld")
+
+        self.assertEqual(mock_process.call_count, 2)
 
 
 if __name__ == "__main__":

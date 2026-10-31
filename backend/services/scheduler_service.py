@@ -32,9 +32,9 @@ class SchedulerService:
 
         try:
             print("[Scheduler] Starte geplante automatische Katalog-Indexierung...")
-            self.indexer_service.scrape_all_series(source="all")
+            completed = self.indexer_service.scrape_all_series(source="all")
             with self.lock:
-                self.last_status = "Erfolgreich abgeschlossen"
+                self.last_status = "Erfolgreich abgeschlossen" if completed else "Übersprungen: Indexierung lief bereits"
                 interval_sec = self.config.indexer_interval_hours * 3600
                 self.next_run = time.time() + interval_sec
             print(f"[Scheduler] Geplante Indexierung abgeschlossen. Nächster Lauf in {self.config.indexer_interval_hours} Stunden.")

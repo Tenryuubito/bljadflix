@@ -1,4 +1,5 @@
 import threading
+import time
 from typing import Optional, Dict, Tuple
 from fastapi import BackgroundTasks
 
@@ -10,6 +11,9 @@ from .indexers.aniworld_indexer import AniWorldIndexer
 from .indexers.sto_indexer import StoIndexer
 from .indexers.filmo_indexer import FilmoIndexer
 
+SERIES_REFRESH_SECONDS = 6 * 3600
+
+
 class IndexerService:
     def __init__(self, db: DatabaseManager, config: Config):
         self.db = db
@@ -18,6 +22,7 @@ class IndexerService:
         self.is_syncing = False
         self.is_indexing = False
         self.active_reindexes = set()
+        self.last_refreshed: Dict[str, float] = {}
         self.indexers: Dict[str, BaseIndexer] = {
             "aniworld": AniWorldIndexer(db, config),
             "sto": StoIndexer(db, config),
@@ -34,7 +39,19 @@ class IndexerService:
         indexer = self.get_indexer(source)
         return indexer.process_single_series(s_url)
 
-    def process_single_series_background(self, s_url: str, source: Optional[str] = "aniworld") -> Tuple[str, bool, str]:
+    def _claim_refresh(self, s_url: str, source: Optional[str], force: bool) -> bool:
+        key = f"{self.db.sanitize_source(source)}:{s_url.rstrip('/')}"
+        now = time.time()
+        with self.sync_lock:
+            last = self.last_refreshed.get(key)
+            if not force and last is not None and now - last < SERIES_REFRESH_SECONDS:
+                return False
+            self.last_refreshed[key] = now
+            return True
+
+    def process_single_series_background(self, s_url: str, source: Optional[str] = "aniworld", force: bool = False) -> Tuple[str, bool, str]:
+        if not self._claim_refresh(s_url, source, force):
+            return s_url, True, "Kürzlich aktualisiert"
         with self.sync_lock:
             if s_url in self.active_reindexes:
                 print(f"Reindex für {s_url} ({source}) läuft bereits im Hintergrund.")
@@ -47,11 +64,11 @@ class IndexerService:
             with self.sync_lock:
                 self.active_reindexes.discard(s_url)
 
-    def scrape_all_series(self, source: Optional[str] = None, limit: Optional[int] = None, incremental: bool = True):
+    def scrape_all_series(self, source: Optional[str] = None, limit: Optional[int] = None, incremental: bool = True) -> bool:
         with self.sync_lock:
             if self.is_indexing:
                 indexer_logger.log("Indexierung läuft bereits im Hintergrund.", "WARN", "SYSTEM")
-                return
+                return False
             self.is_indexing = True
 
         mode_str = "inkrementelle " if incremental else "vollständige "
@@ -73,6 +90,7 @@ class IndexerService:
             with self.sync_lock:
                 self.is_indexing = False
             indexer_logger.log("Globale Indexierung abgeschlossen.", "SUCCESS", "SYSTEM")
+        return True
 
     def get_sync_status(self) -> dict:
         return {"is_syncing": self.is_syncing, "is_indexing": self.is_indexing}
@@ -107,6 +125,12 @@ class IndexerService:
             if self.is_syncing:
                 return {"status": "already_syncing", "synced_count": 0}
             self.is_syncing = True
+
+        urls = [url for url in urls if self._claim_refresh(url, clean_source, False)]
+        if not urls:
+            with self.sync_lock:
+                self.is_syncing = False
+            return {"status": "success", "synced_count": 0}
 
         def sync_task(urls_to_sync, src):
             indexer = self.get_indexer(src)

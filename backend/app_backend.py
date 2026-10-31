@@ -230,7 +230,7 @@ def reindex_single_series(
     source_url = content_service.get_source_page_url(source=source, content_id=content_id)
     if not source_url:
         raise HTTPException(status_code=404, detail="Serie nicht gefunden oder keine Source-URL vorhanden.")
-    background_tasks.add_task(indexer_service.process_single_series_background, source_url, source)
+    background_tasks.add_task(indexer_service.process_single_series_background, source_url, source, True)
     return {"status": "success", "message": "Reindexierung im Hintergrund gestartet"}
 
 
