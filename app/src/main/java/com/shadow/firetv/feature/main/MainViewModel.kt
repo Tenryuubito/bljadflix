@@ -38,7 +38,6 @@ data class MainUiState(
     val isEndOfList: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
-    val firstLoadedPage: Int = 1,
     val lastLoadedPage: Int = 1,
     val isInitializing: Boolean = true,
     val initCurrentStep: Int = 0,
@@ -69,7 +68,6 @@ class MainViewModel(
     private var debounceJob: Job? = null
     private var syncJob: Job? = null
     private var initJob: Job? = null
-    private val maxPages = 5
     private val maxSyncPolls = 150
     private var lastNonSearchSidebarIndex = 0
 
@@ -108,7 +106,7 @@ class MainViewModel(
                     genresList = emptyList()
                 }
 
-            val baseComponents = listOf("📺 Weiterschauen", "⭐ Meine Watchlist", "🎬 Alle Serien", "⚙️ Einstellungen")
+            val baseComponents = listOf("📺 Weiterschauen", "⭐ Meine Watchlist", "🎬 Alle Serien")
             val sidebarItems = baseComponents + genresList
             _uiState.update { it.copy(sidebarItems = sidebarItems, selectedSource = currentSource) }
 
@@ -247,13 +245,13 @@ class MainViewModel(
         viewModelScope.launch {
             repository.getGenres()
                 .onSuccess { genres ->
-                    val items = mutableListOf("📺 Weiterschauen", "⭐ Meine Watchlist", "🎬 Alle Serien", "⚙️ Einstellungen").apply {
+                    val items = mutableListOf("📺 Weiterschauen", "⭐ Meine Watchlist", "🎬 Alle Serien").apply {
                         addAll(sanitizeGenres(genres))
                     }
                     _uiState.update { it.copy(sidebarItems = items) }
                 }
                 .onFailure {
-                    val defaultItems = listOf("📺 Weiterschauen", "⭐ Meine Watchlist", "🎬 Alle Serien", "⚙️ Einstellungen")
+                    val defaultItems = listOf("📺 Weiterschauen", "⭐ Meine Watchlist", "🎬 Alle Serien")
                     _uiState.update { it.copy(sidebarItems = defaultItems) }
                 }
         }
@@ -264,13 +262,6 @@ class MainViewModel(
         if (index < 0 || index >= items.size) return
 
         val selectedItem = items[index]
-
-        if (selectedItem == "⚙️ Einstellungen") {
-            viewModelScope.launch {
-                _events.emit(MainEvent.NavigateToSettings)
-            }
-            return
-        }
 
         lastNonSearchSidebarIndex = index
         _uiState.update { it.copy(selectedSidebarIndex = index) }
@@ -283,6 +274,12 @@ class MainViewModel(
         }
     }
 
+    fun openSettings() {
+        viewModelScope.launch {
+            _events.emit(MainEvent.NavigateToSettings)
+        }
+    }
+
     fun selectMode(mode: MainMode, genre: String = "") {
         _uiState.update {
             it.copy(
@@ -290,13 +287,12 @@ class MainViewModel(
                 currentGenre = genre,
                 movies = emptyList(),
                 continueWatchingItems = emptyList(),
-                firstLoadedPage = 1,
                 lastLoadedPage = 1,
                 isEndOfList = false,
                 errorMessage = null
             )
         }
-        loadContentBottom(isReset = true)
+        loadContentBottom(isReset = true, delayMillis = SELECTION_DEBOUNCE_MS)
     }
 
     fun onSearchQueryChanged(query: String) {
@@ -310,7 +306,6 @@ class MainViewModel(
                         currentQuery = query,
                         selectedSidebarIndex = -1,
                         movies = emptyList(),
-                        firstLoadedPage = 1,
                         lastLoadedPage = 1,
                         isEndOfList = false,
                         errorMessage = null
@@ -328,12 +323,14 @@ class MainViewModel(
         }
     }
 
-    fun loadContentBottom(isReset: Boolean = false) {
-        if (_uiState.value.isLoading) return
+    fun loadContentBottom(isReset: Boolean = false, delayMillis: Long = 0) {
+        val state = _uiState.value
+        if (!isReset && (state.isLoading || state.isEndOfList)) return
         loadJob?.cancel()
 
         loadJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            if (delayMillis > 0) delay(delayMillis)
             val pageToLoad = if (isReset) 1 else _uiState.value.lastLoadedPage + 1
             val currentState = _uiState.value
 
@@ -378,51 +375,6 @@ class MainViewModel(
         }
     }
 
-    fun loadContentTop() {
-        val currentState = _uiState.value
-        if (currentState.isLoading || currentState.firstLoadedPage <= 1) return
-        loadJob?.cancel()
-
-        loadJob = viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            val pageToLoad = currentState.firstLoadedPage - 1
-
-            val result = when (currentState.mode) {
-                MainMode.GENRE -> repository.getMoviesByGenre(currentState.currentGenre, pageToLoad)
-                MainMode.SEARCH -> repository.searchMovies(currentState.currentQuery, null, pageToLoad)
-                else -> Result.success(emptyList())
-            }
-
-            result.onSuccess { res ->
-                if (res.isNotEmpty()) {
-                    val currentList = currentState.movies
-                    val newMovies = res.filter { new -> currentList.none { old -> old.id == new.id } }
-                    val updatedMovies = newMovies + currentList
-
-                    var newLastPage = currentState.lastLoadedPage
-                    var finalMovies = updatedMovies
-                    if (newLastPage - pageToLoad + 1 > maxPages) {
-                        finalMovies = updatedMovies.dropLast(20)
-                        newLastPage--
-                    }
-
-                    _uiState.update {
-                        it.copy(
-                            movies = finalMovies,
-                            firstLoadedPage = pageToLoad,
-                            lastLoadedPage = newLastPage,
-                            isLoading = false
-                        )
-                    }
-                } else {
-                    _uiState.update { it.copy(isLoading = false) }
-                }
-            }.onFailure {
-                _uiState.update { it.copy(isLoading = false) }
-            }
-        }
-    }
-
     private fun handleMovieResult(res: List<Movie>, pageToLoad: Int, isWatchlist: Boolean = false) {
         val isEndOfList = isWatchlist || res.size < 20
         _uiState.update { currentState ->
@@ -430,26 +382,15 @@ class MainViewModel(
                 if (pageToLoad == 1) {
                     currentState.copy(
                         movies = res,
-                        firstLoadedPage = 1,
                         lastLoadedPage = 1,
                         isEndOfList = isEndOfList,
                         isLoading = false,
                         errorMessage = null
                     )
                 } else {
-                    val newMovies = res.filter { new -> currentState.movies.none { old -> old.id == new.id } }
-                    val combined = currentState.movies + newMovies
-                    var newFirstPage = currentState.firstLoadedPage
-                    var finalMovies = combined
-
-                    if (pageToLoad - newFirstPage + 1 > maxPages) {
-                        finalMovies = combined.drop(20)
-                        newFirstPage++
-                    }
-
+                    val knownIds = currentState.movies.mapTo(HashSet()) { it.id }
                     currentState.copy(
-                        movies = finalMovies,
-                        firstLoadedPage = newFirstPage,
+                        movies = currentState.movies + res.filter { it.id !in knownIds },
                         lastLoadedPage = pageToLoad,
                         isEndOfList = isEndOfList,
                         isLoading = false,
@@ -509,6 +450,10 @@ class MainViewModel(
                 delay(2000)
             }
         }
+    }
+
+    companion object {
+        private const val SELECTION_DEBOUNCE_MS = 200L
     }
 
     class Factory(

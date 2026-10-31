@@ -100,6 +100,7 @@ jobs:
                   "versionCode": code,
                   "versionName": name,
                   "packageName": "com.shadow.firetv.installer",
+                  "downloadUrl": "/app/download/launcher",
               },
               "mainApp": {
                   "packageName": "com.shadow.firetv",
@@ -161,7 +162,7 @@ jobs:
         run: >
           rsync -az
           --exclude '*.db' --exclude '*.db-*'
-          --exclude 'config.json' --exclude 'updates/'
+          --exclude 'config.json' --exclude 'updates/' --exclude 'image_cache/'
           --exclude '__pycache__/' --exclude '*.log'
           -e "$SSH_CMD"
           backend/ "$DEPLOY_USER@$DEPLOY_HOST:bljadflix/backend/"

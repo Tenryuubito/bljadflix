@@ -115,6 +115,15 @@
                 android:popupBackground="#161622"
                 android:minHeight="48dp" />
 
+            <TextView
+                android:id="@+id/tv_episodes_message"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:textColor="@color/text_muted"
+                android:textSize="18sp"
+                android:visibility="gone" />
+
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/rv_episodes"
                 android:layout_width="match_parent"

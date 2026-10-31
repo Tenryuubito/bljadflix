@@ -1,5 +1,6 @@
 package com.shadow.firetv.core.data
 
+import com.shadow.firetv.core.model.AppVersionResponse
 import com.shadow.firetv.core.model.AuthStatusResponse
 import com.shadow.firetv.core.model.ContinueWatchingItem
 import com.shadow.firetv.core.model.Episode
@@ -38,4 +39,5 @@ interface MovieRepository {
     suspend fun syncUserContent(): Result<Unit>
     suspend fun getSyncStatus(): Result<SyncStatusResponse>
     suspend fun triggerIndex(source: String? = null): Result<TriggerIndexResponse>
+    suspend fun getAppVersion(): Result<AppVersionResponse>
 }

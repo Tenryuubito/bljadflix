@@ -17,6 +17,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.viewModels
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import androidx.lifecycle.Lifecycle
@@ -25,6 +26,8 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.SimpleItemAnimator
+import com.shadow.firetv.core.model.MainAppVersion
 import com.shadow.firetv.core.theme.ThemeManager
 import com.shadow.firetv.feature.auth.LoginActivity
 import com.shadow.firetv.feature.main.MainEvent
@@ -32,6 +35,7 @@ import com.shadow.firetv.feature.main.MainMode
 import com.shadow.firetv.feature.main.MainUiState
 import com.shadow.firetv.feature.main.MainViewModel
 import com.shadow.firetv.feature.settings.SettingsActivity
+import com.shadow.firetv.feature.update.UpdateViewModel
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -56,6 +60,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var splashPercentText: TextView
 
     private val viewModel: MainViewModel by viewModels { MainViewModel.Factory() }
+    private val updateViewModel: UpdateViewModel by viewModels { UpdateViewModel.Factory() }
+    private var updateDialog: AlertDialog? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,6 +73,7 @@ class MainActivity : AppCompatActivity() {
         progressMain = findViewById(R.id.progress_main)
         tvEmpty = findViewById(R.id.tv_empty)
         etSearch = findViewById(R.id.et_search)
+        setupSettingsButton(findViewById(R.id.btn_settings))
 
         splashOverlay = findViewById(R.id.splash_screen_overlay)
         splashProgressBar = findViewById(R.id.splash_progress_bar)
@@ -98,31 +105,26 @@ class MainActivity : AppCompatActivity() {
             .start()
 
         try {
-            val resId = resources.getIdentifier("bljadflix_intro", "raw", packageName)
-            if (resId != 0) {
-                mediaPlayer = MediaPlayer.create(this, resId)
-                if (mediaPlayer != null) {
-                    mediaPlayer?.setOnCompletionListener { mp ->
-                        mp.release()
-                        if (this.mediaPlayer === mp) {
-                            this.mediaPlayer = null
-                        }
-                        isIntroAudioDone = true
-                        checkSplashAndHide()
+            mediaPlayer = MediaPlayer.create(this, R.raw.bljadflix_intro)
+            if (mediaPlayer != null) {
+                mediaPlayer?.setOnCompletionListener { mp ->
+                    mp.release()
+                    if (this.mediaPlayer === mp) {
+                        this.mediaPlayer = null
                     }
-                    mediaPlayer?.setOnErrorListener { mp, _, _ ->
-                        mp.release()
-                        if (this.mediaPlayer === mp) {
-                            this.mediaPlayer = null
-                        }
-                        isIntroAudioDone = true
-                        checkSplashAndHide()
-                        true
-                    }
-                    mediaPlayer?.start()
-                } else {
                     isIntroAudioDone = true
+                    checkSplashAndHide()
                 }
+                mediaPlayer?.setOnErrorListener { mp, _, _ ->
+                    mp.release()
+                    if (this.mediaPlayer === mp) {
+                        this.mediaPlayer = null
+                    }
+                    isIntroAudioDone = true
+                    checkSplashAndHide()
+                    true
+                }
+                mediaPlayer?.start()
             } else {
                 isIntroAudioDone = true
             }
@@ -148,6 +150,7 @@ class MainActivity : AppCompatActivity() {
         }
         viewModel.checkAuthStatus()
         viewModel.refreshState()
+        updateViewModel.checkForUpdate()
     }
 
     private fun setupGrid() {
@@ -188,13 +191,16 @@ class MainActivity : AppCompatActivity() {
             overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
         }
 
-        layoutManager = GridLayoutManager(this, 5)
+        layoutManager = GridLayoutManager(this, MovieAdapter.SPAN_COUNT)
         layoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
             override fun getSpanSize(position: Int): Int {
-                return if (gridAdapter.getItemViewType(position) == 1) 5 else 1
+                return if (gridAdapter.getItemViewType(position) == 1) MovieAdapter.SPAN_COUNT else 1
             }
         }
         rvContentGrid.layoutManager = layoutManager
+        rvContentGrid.setHasFixedSize(true)
+        rvContentGrid.setItemViewCacheSize(MovieAdapter.SPAN_COUNT * 2)
+        (rvContentGrid.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
         rvContentGrid.adapter = gridAdapter
         rvContentGrid.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
@@ -202,15 +208,19 @@ class MainActivity : AppCompatActivity() {
                 if (mode == MainMode.CONTINUE_WATCHING || mode == MainMode.WATCHLIST) return
 
                 val lastVisible = layoutManager.findLastVisibleItemPosition()
-                val firstVisible = layoutManager.findFirstVisibleItemPosition()
-
-                if (gridAdapter.itemCount > 0 && lastVisible >= gridAdapter.itemCount - 12) {
+                if (gridAdapter.itemCount > 0 && lastVisible >= gridAdapter.itemCount - MovieAdapter.SPAN_COUNT * 3) {
                     viewModel.loadContentBottom()
-                } else if (gridAdapter.itemCount > 0 && firstVisible <= 12 && viewModel.uiState.value.firstLoadedPage > 1) {
-                    viewModel.loadContentTop()
                 }
             }
         })
+    }
+
+    private fun setupSettingsButton(button: ImageView) {
+        button.setOnClickListener { viewModel.openSettings() }
+        button.setOnFocusChangeListener { v, hasFocus ->
+            val scale = if (hasFocus) 1.15f else 1.0f
+            v.animate().scaleX(scale).scaleY(scale).setDuration(120).start()
+        }
     }
 
     private fun setupSearch() {
@@ -251,6 +261,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupSidebar() {
         rvSidebarCategories.layoutManager = LinearLayoutManager(this)
+        rvSidebarCategories.setHasFixedSize(true)
+        (rvSidebarCategories.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
         sidebarAdapter = SidebarAdapter(emptyList()) { position ->
             etSearch.text.clear()
             viewModel.selectSidebarIndex(position)
@@ -265,6 +277,9 @@ class MainActivity : AppCompatActivity() {
                     viewModel.uiState.collect { state ->
                         renderState(state)
                     }
+                }
+                launch {
+                    updateViewModel.availableUpdate.collect { showUpdateDialogIfReady() }
                 }
                 launch {
                     viewModel.events.collect { event ->
@@ -293,9 +308,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderState(state: MainUiState) {
-        if (sidebarAdapter.itemCount != state.sidebarItems.size) {
-            sidebarAdapter.updateItems(state.sidebarItems)
-        }
+        sidebarAdapter.updateItems(state.sidebarItems)
         sidebarAdapter.selectItemQuietly(state.selectedSidebarIndex)
 
         progressMain.visibility = if (state.isLoading && state.movies.isEmpty() && state.continueWatchingItems.isEmpty()) View.VISIBLE else View.GONE
@@ -331,7 +344,54 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showUpdateDialogIfReady() {
+        val update = updateViewModel.availableUpdate.value ?: return
+        if (updateDialog?.isShowing == true || splashOverlay.visibility != View.GONE || isFinishing) return
+        updateDialog = createUpdateDialog(update).also { dialog ->
+            dialog.setOnShowListener {
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.requestFocus()
+            }
+            dialog.show()
+        }
+    }
+
+    private fun createUpdateDialog(update: MainAppVersion): AlertDialog {
+        val changelog = update.changelog?.takeIf { it.isNotBlank() }
+        val message = buildString {
+            append(getString(R.string.update_dialog_message, update.versionName, BuildConfig.VERSION_NAME))
+            if (changelog != null) {
+                append("\n\n")
+                append(changelog)
+            }
+        }
+        return AlertDialog.Builder(this)
+            .setTitle(R.string.update_dialog_title)
+            .setMessage(message)
+            .setPositiveButton(R.string.update_dialog_install) { _, _ -> startLauncherUpdate() }
+            .setNegativeButton(R.string.update_dialog_later) { _, _ -> updateViewModel.dismissUpdate() }
+            .setOnCancelListener { updateViewModel.dismissUpdate() }
+            .create()
+    }
+
+    private fun startLauncherUpdate() {
+        val launchIntent = packageManager.getLaunchIntentForPackage(LAUNCHER_PACKAGE)
+        if (launchIntent == null) {
+            updateViewModel.dismissUpdate()
+            Toast.makeText(
+                this,
+                getString(R.string.update_launcher_missing, BuildConfig.BACKEND_URL.trimEnd('/')),
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        startActivity(launchIntent)
+        finishAffinity()
+    }
+
     override fun onDestroy() {
+        updateDialog?.dismiss()
+        updateDialog = null
         super.onDestroy()
         try {
             mediaPlayer?.release()
@@ -348,6 +408,7 @@ class MainActivity : AppCompatActivity() {
                 .setDuration(400)
                 .withEndAction {
                     splashOverlay.visibility = View.GONE
+                    showUpdateDialogIfReady()
                     if (sidebarAdapter.itemCount > 0) {
                         rvSidebarCategories.post {
                             val firstChild = rvSidebarCategories.getChildAt(0)
@@ -363,6 +424,10 @@ class MainActivity : AppCompatActivity() {
                 }
                 .start()
         }
+    }
+
+    companion object {
+        private const val LAUNCHER_PACKAGE = "com.shadow.firetv.installer"
     }
 }
 
@@ -396,6 +461,7 @@ class SidebarAdapter(
     fun getSelectedIndex() = selectedIndex
 
     fun updateItems(newItems: List<String>) {
+        if (items == newItems) return
         items = newItems
         safeNotify { notifyDataSetChanged() }
     }
@@ -439,11 +505,7 @@ class SidebarAdapter(
         ThemeManager.getInstance(holder.itemView.context).applySidebarTheme(holder.itemView, holder.tv)
 
         holder.itemView.setOnClickListener {
-            if (item == "⚙️ Einstellungen" || item == holder.itemView.context.getString(R.string.sidebar_settings)) {
-                onItemSelected(position)
-            } else {
-                selectItem(position)
-            }
+            selectItem(position)
         }
 
         holder.itemView.setOnFocusChangeListener { view, hasFocus ->
@@ -451,11 +513,7 @@ class SidebarAdapter(
             if (hasFocus) {
                 view.animate().scaleX(1.04f).scaleY(1.04f).setInterpolator(interpolator).setDuration(120).start()
                 view.isSelected = true
-                if (item == "⚙️ Einstellungen" || item == holder.itemView.context.getString(R.string.sidebar_settings)) {
-                    selectItemQuietly(position)
-                } else {
-                    selectItem(position)
-                }
+                selectItem(position)
             } else {
                 view.animate().scaleX(1.0f).scaleY(1.0f).setInterpolator(interpolator).setDuration(120).start()
             }
@@ -465,7 +523,7 @@ class SidebarAdapter(
             if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && event.action == KeyEvent.ACTION_DOWN) {
                 val rvContentGrid = view.rootView.findViewById<RecyclerView>(R.id.rv_content_grid)
                 if (rvContentGrid != null && rvContentGrid.adapter != null && rvContentGrid.adapter!!.itemCount > 0) {
-                    val layoutManager = rvContentGrid.layoutManager as? GridLayoutManager
+                    val layoutManager = rvContentGrid.layoutManager as? LinearLayoutManager
                     val firstVisible = layoutManager?.findFirstVisibleItemPosition() ?: 0
                     val targetPos = if (firstVisible >= 0) firstVisible else 0
                     val targetView = layoutManager?.findViewByPosition(targetPos)

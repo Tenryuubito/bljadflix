@@ -13,13 +13,16 @@ import com.shadow.firetv.feature.main.MainEvent
 import com.shadow.firetv.feature.main.MainMode
 import com.shadow.firetv.feature.main.MainViewModel
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -51,7 +54,7 @@ class MainViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isInitializing)
         assertEquals(100, state.initProgressPercent)
-        val expectedSidebar = listOf("📺 Weiterschauen", "⭐ Meine Watchlist", "🎬 Alle Serien", "⚙️ Einstellungen", "Action", "Comedy")
+        val expectedSidebar = listOf("📺 Weiterschauen", "⭐ Meine Watchlist", "🎬 Alle Serien", "Action", "Comedy")
         assertEquals(expectedSidebar, state.sidebarItems)
         assertEquals(MainMode.CONTINUE_WATCHING, state.mode)
     }
@@ -62,7 +65,7 @@ class MainViewModelTest {
         coEvery { repository.getMoviesByGenre("Action", 1, 20) } returns Result.success(movies)
 
         advanceUntilIdle()
-        viewModel.selectSidebarIndex(4)
+        viewModel.selectSidebarIndex(3)
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -73,10 +76,47 @@ class MainViewModelTest {
     }
 
     @Test
-    fun `selecting settings sidebar item emits NavigateToSettings event`() = runTest {
+    fun `switching genres quickly shows content of the last selected genre`() = runTest {
+        val actionMovies = listOf(Movie(1, "Action Movie", "Desc", "url", "pageUrl", "Action"))
+        val comedyMovies = listOf(Movie(2, "Comedy Movie", "Desc", "url", "pageUrl", "Comedy"))
+        coEvery { repository.getMoviesByGenre("Action", 1, 20) } coAnswers {
+            delay(1000)
+            Result.success(actionMovies)
+        }
+        coEvery { repository.getMoviesByGenre("Comedy", 1, 20) } returns Result.success(comedyMovies)
+
+        advanceUntilIdle()
+        viewModel.selectSidebarIndex(3)
+        testScheduler.advanceTimeBy(300)
+        viewModel.selectSidebarIndex(4)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("Comedy", state.currentGenre)
+        assertEquals(comedyMovies, state.movies)
+        assertFalse(state.isLoading)
+    }
+
+    @Test
+    fun `loading more content stops at end of list`() = runTest {
+        val movies = listOf(Movie(1, "Action Movie", "Desc", "url", "pageUrl", "Action"))
+        coEvery { repository.getMoviesByGenre("Action", 1, 20) } returns Result.success(movies)
+
+        advanceUntilIdle()
+        viewModel.selectSidebarIndex(3)
+        advanceUntilIdle()
+        viewModel.loadContentBottom()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isEndOfList)
+        coVerify(exactly = 0) { repository.getMoviesByGenre("Action", 2, 20) }
+    }
+
+    @Test
+    fun `opening settings emits NavigateToSettings event`() = runTest {
         advanceUntilIdle()
         viewModel.events.test {
-            viewModel.selectSidebarIndex(3)
+            viewModel.openSettings()
             assertEquals(MainEvent.NavigateToSettings, awaitItem())
         }
     }

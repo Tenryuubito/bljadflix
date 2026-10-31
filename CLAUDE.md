@@ -47,7 +47,9 @@ python -m unittest tests.test_sto_indexer
 
 Benötigte Secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, optional `DEPLOY_KNOWN_HOSTS`, außerdem `SIGNING_KEYSTORE_BASE64`, `SIGNING_KEYSTORE_PASSWORD`, `SIGNING_KEY_ALIAS` und `SIGNING_KEY_PASSWORD`. Variable: `BACKEND_URL`. Lokal gebaute Release-APKs werden nur signiert, wenn `SIGNING_KEYSTORE_PATH` gesetzt ist. Den Keystore niemals wechseln, sonst lassen sich installierte Apps nicht mehr aktualisieren.
 
-Erstinstallation auf einem Fire TV: In der App „Downloader“ `http://<server>:8000/install` öffnen. Das leitet auf die Installer-APK weiter. Der Installer lädt dann die Haupt-App und installiert später auch deren Updates. Sich selbst aktualisiert er nicht, neue Installer-Versionen müssen erneut über `/install` geladen werden.
+Erstinstallation auf einem Fire TV: In der App „Downloader“ `http://<server>:8000/install` öffnen. Das leitet auf die Installer-APK weiter.
+
+Update-Ablauf: Die Haupt-App fragt bei jedem `onResume` von `MainActivity` `/app/version` ab (`feature/update/UpdateViewModel`). Ist `mainApp.versionCode` höher als der eigene, erscheint nach dem Splash ein Dialog. „Jetzt aktualisieren“ startet den Installer und beendet die App. Der Installer arbeitet beim Start automatisch (`AutoMode.FULL`): Ist `launcher.versionCode` höher als der eigene, lädt und installiert er zuerst sich selbst, danach die Haupt-App. Ist alles aktuell, startet er die Haupt-App und beendet sich. Nach der Rückkehr aus dem System-Installationsdialog prüft er erneut (`AutoMode.LAUNCH_ONLY`), damit ein abgebrochenes Update keine Endlosschleife erzeugt. Die Bestätigung im Android-Installationsdialog lässt sich bei Sideload-Apps nicht umgehen. Der Installer braucht die Freigabe „Apps unbekannter Herkunft“.
 
 ## Android-App
 
@@ -58,9 +60,9 @@ Erstinstallation auf einem Fire TV: In der App „Downloader“ `http://<server>
 - DTOs in `core/model/Models.kt` verwenden snake_case-Feldnamen, damit Gson ohne Annotationen auf das Backend-JSON passt.
 - Quelle (`StreamingSource`: aniworld, sto, filmo): Das Repository setzt sie als `source`-Query-Parameter bzw. als `source`-Feld in `ProgressRequest`/`WatchlistRequest`. Methoden mit optionalem `source`-Parameter fallen auf die aktive Quelle zurück. Inhalte aus Watchlist und „Weiterschauen“ können aus einer anderen Quelle stammen, deshalb wird ihre Quelle als Intent-Extra `SOURCE` an Detail- und Player-Screen weitergegeben.
 - Player: Es gibt kein ExoPlayer. `PlayerActivity` lädt die aufgelöste Hoster-URL in eine WebView und steuert `<video>` bzw. jwplayer per injiziertem JavaScript. Fortschritt wird periodisch an `/progress` gemeldet, ab 90 % gilt eine Folge als gesehen, am Ende startet automatisch die nächste.
-- Sidebar-Einträge in `MainViewModel` sind deutsche Strings mit Emoji (`"📺 Weiterschauen"`, `"⚙️ Einstellungen"` …) und werden per String-Vergleich ausgewertet, auch in `SidebarAdapter`. Bei Umbenennungen alle Stellen inklusive Tests anpassen.
+- Sidebar-Einträge in `MainViewModel` sind deutsche Strings mit Emoji (`"📺 Weiterschauen"`, `"⭐ Meine Watchlist"` …) und werden per String-Vergleich ausgewertet. Bei Umbenennungen alle Stellen inklusive Tests anpassen. Die Einstellungen sind kein Sidebar-Eintrag, sondern das Symbol `btn_settings` neben dem App-Namen (`MainViewModel.openSettings()`).
 - D-Pad-Fokus wird in den Adaptern explizit gesteuert (`setOnKeyListener`, Fokus-Skalierung über `animate()`). Jedes interaktive Element muss fokussierbar bleiben.
-- Bilder lädt Glide mit `DecodeFormat.PREFER_RGB_565`, um auf Fire-TV-Sticks Speicher zu sparen.
+- Cover lädt ausschließlich `core/image/CoverLoader` über das Backend (`/cover/{source}/{content_id}`), nie direkt von den Quellseiten, weil diese in deutschen Heimnetzen per DNS gesperrt sein können. Glide nutzt `DecodeFormat.PREFER_RGB_565`, um auf Fire-TV-Sticks Speicher zu sparen. Fehlt ein Bild oder schlägt das Laden fehl, erscheint `placeholder_cover`.
 
 ## Backend
 
@@ -73,6 +75,7 @@ Erstinstallation auf einem Fire TV: In der App „Downloader“ `http://<server>
 - Eine aktive Session pro Nutzer. Ein Login auf einem anderen Gerät ersetzt die Session, das alte Gerät bekommt 409. Nach 3 Fehlversuchen werden IP und Gerät dauerhaft gesperrt (`banned_devices`). Die Middleware blockt gesperrte Clients bei jedem Request.
 - Admin-Dashboard: `/dashboard` liefert das HTML aus `dashboard_view.py` (Tailwind, Chart.js, Vanilla JS). Die Anmeldung erfolgt mit `admin_password` über `POST /admin/api/login`, das ein Token zurückgibt (12 h gültig, nur im Speicher, nach 5 Fehlversuchen 15 min Sperre pro IP). Das Dashboard speichert es in `sessionStorage` und schickt es als `X-Admin-Token` mit. Alle `/admin/*`-Routen außer Login, Logout und Dashboard-Seite hängen an `admin_router` mit `Depends(require_admin)`. `/admin/trigger-index` akzeptiert auch ein normales Nutzer-Token, weil die TV-App den Indexer startet. Neue Admin-Routen gehören an `admin_router`, nicht an `app`.
 - Datenbank-Explorer: Tabellennamen werden gegen `sqlite_master` geprüft und Bezeichner mit `_quote_identifier` maskiert. Niemals Namen ungeprüft in SQL einsetzen.
+- Cover (öffentlich, ohne Login): `/cover/{source}/{content_id}` schlägt die `cover_url` in der Datenbank nach (keine frei wählbaren URLs), lädt das Bild, verkleinert es mit Pillow auf 300 px Breite und legt es in `backend/image_cache/` ab. Der Ordner ist gitignored und vom Deploy-rsync ausgenommen.
 - App-Verteilung (öffentlich, ohne Login): `/app/version` liest `backend/updates/version.json`. `/app/download/main` und `/app/download/launcher` liefern die APKs aus `backend/updates/` und fallen sonst auf die Debug-Build-Ausgaben zurück.
 
 ## Tests

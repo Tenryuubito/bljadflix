@@ -2,7 +2,6 @@
 <resources>
     <string name="app_name">Bljadflix</string>
 
-    <string name="sidebar_settings">⚙️ Einstellungen</string>
 
     <string name="btn_watchlist_add">Zur Watchlist hinzufügen</string>
     <string name="btn_watchlist_added">Auf der Watchlist</string>
@@ -22,4 +21,10 @@
 
     <string name="seek_forward_10">+10s</string>
     <string name="seek_rewind_10">-10s</string>
+
+    <string name="update_dialog_title">Update verfügbar</string>
+    <string name="update_dialog_message">Bljadflix v%1$s ist verfügbar (installiert: v%2$s).</string>
+    <string name="update_dialog_install">Jetzt aktualisieren</string>
+    <string name="update_dialog_later">Später</string>
+    <string name="update_launcher_missing">Bljadflix Installer fehlt. Bitte über %1$s/install installieren.</string>
 </resources>

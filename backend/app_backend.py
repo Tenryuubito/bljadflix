@@ -14,6 +14,7 @@ from models.content import MovieResponse, StreamResponse, ProgressRequest, Watch
 from services.auth_service import AuthService
 from services.content_service import ContentService
 from services.stream_service import StreamService
+from services.image_service import ImageService
 from services.indexer_service import IndexerService
 from services.scheduler_service import SchedulerService
 from services.admin_service import AdminService
@@ -28,6 +29,7 @@ db.init_db()
 auth_service = AuthService(db)
 content_service = ContentService(db)
 stream_service = StreamService(db, config)
+image_service = ImageService(db, config)
 indexer_service = IndexerService(db, config)
 scheduler_service = SchedulerService(indexer_service, config)
 admin_service = AdminService(db)
@@ -281,6 +283,14 @@ def get_watchlist(
 ):
     user_id = user["user_id"]
     return content_service.get_watchlist(user_id=user_id, source=source, page=page, limit=limit)
+
+
+@app.get("/cover/{source}/{content_id}")
+def get_cover(source: str, content_id: int):
+    path = image_service.get_cover_path(source, content_id)
+    if not path:
+        raise HTTPException(status_code=404, detail="Cover nicht verfügbar")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=604800"})
 
 
 @app.get("/resolve-stream", response_model=StreamResponse)
@@ -551,7 +561,8 @@ def get_app_version():
         "launcher": {
             "versionCode": 1,
             "versionName": "1.0.0",
-            "packageName": "com.shadow.firetv.installer"
+            "packageName": "com.shadow.firetv.installer",
+            "downloadUrl": "/app/download/launcher"
         },
         "mainApp": {
             "packageName": "com.shadow.firetv",

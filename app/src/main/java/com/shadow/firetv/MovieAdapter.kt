@@ -10,10 +10,7 @@ import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import androidx.recyclerview.widget.AsyncListDiffer
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
-import com.bumptech.glide.Glide
-import com.bumptech.glide.load.DecodeFormat
-import com.bumptech.glide.load.engine.DiskCacheStrategy
-import com.bumptech.glide.request.RequestOptions
+import com.shadow.firetv.core.image.CoverLoader
 import com.shadow.firetv.core.model.Movie
 
 class MovieAdapter(
@@ -22,26 +19,8 @@ class MovieAdapter(
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     private var isEndOfList: Boolean = false
-    private var recyclerView: RecyclerView? = null
-
-    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
-        super.onAttachedToRecyclerView(recyclerView)
-        this.recyclerView = recyclerView
-    }
-
-    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
-        super.onDetachedFromRecyclerView(recyclerView)
-        this.recyclerView = null
-    }
-
-    private fun safeNotify(action: () -> Unit) {
-        val rv = recyclerView
-        if (rv != null && rv.isComputingLayout) {
-            rv.post { action() }
-        } else {
-            action()
-        }
-    }
+    private var pendingEndOfList: Boolean = false
+    private val focusInterpolator = FastOutSlowInInterpolator()
 
     private val diffCallback = object : DiffUtil.ItemCallback<Movie>() {
         override fun areItemsTheSame(oldItem: Movie, newItem: Movie): Boolean = oldItem.id == newItem.id
@@ -51,13 +30,17 @@ class MovieAdapter(
     private val differ = AsyncListDiffer(this, diffCallback)
 
     fun setMovies(newMovies: List<Movie>, endOfList: Boolean = false) {
-        val oldHasFooter = isEndOfList
-        isEndOfList = endOfList
+        pendingEndOfList = endOfList
         differ.submitList(newMovies) {
-            if (oldHasFooter != endOfList) {
-                safeNotify { notifyDataSetChanged() }
-            }
+            applyFooterState()
         }
+    }
+
+    private fun applyFooterState() {
+        if (isEndOfList == pendingEndOfList) return
+        isEndOfList = pendingEndOfList
+        val footerPosition = differ.currentList.size
+        if (isEndOfList) notifyItemInserted(footerPosition) else notifyItemRemoved(footerPosition)
     }
 
     override fun getItemViewType(position: Int): Int {
@@ -65,88 +48,10 @@ class MovieAdapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        val inflater = LayoutInflater.from(parent.context)
         if (viewType == 1) {
-            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_end_of_list, parent, false)
-            return FooterViewHolder(view)
-        }
-        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_movie, parent, false)
-        return MovieViewHolder(view)
-    }
-
-    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        if (holder is MovieViewHolder) {
-            val movie = differ.currentList[position]
-            holder.title.text = movie.title
-
-            Glide.with(holder.poster.context)
-                .load(movie.cover_url)
-                .apply(
-                    RequestOptions()
-                        .format(DecodeFormat.PREFER_RGB_565)
-                        .diskCacheStrategy(DiskCacheStrategy.ALL)
-                        .placeholder(android.R.drawable.ic_menu_gallery)
-                        .error(android.R.drawable.stat_notify_error)
-                )
-                .into(holder.poster)
-
-            holder.itemView.isFocusable = true
-            holder.itemView.isClickable = true
-
-            holder.itemView.setOnClickListener { onMovieClick(movie) }
-
-            holder.itemView.setOnFocusChangeListener { view, hasFocus ->
-                val interpolator = FastOutSlowInInterpolator()
-                if (hasFocus) {
-                    view.animate()
-                        .scaleX(1.06f)
-                        .scaleY(1.06f)
-                        .translationZ(12f)
-                        .setInterpolator(interpolator)
-                        .setDuration(160)
-                        .start()
-                } else {
-                    view.animate()
-                        .scaleX(1.0f)
-                        .scaleY(1.0f)
-                        .translationZ(0f)
-                        .setInterpolator(interpolator)
-                        .setDuration(160)
-                        .start()
-                }
-            }
-
-            holder.itemView.setOnKeyListener { view, keyCode, event ->
-                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                    val pos = holder.bindingAdapterPosition
-                    val currentListSize = differ.currentList.size
-                    if (pos != RecyclerView.NO_POSITION && currentListSize > 0) {
-                        val isLastRow = (pos / 5) == ((currentListSize - 1) / 5)
-                        if (isLastRow) {
-                            if (!isEndOfList) {
-                                return@setOnKeyListener true
-                            } else {
-                                if (event.action == KeyEvent.ACTION_DOWN) {
-                                    val rv = view.parent as? RecyclerView
-                                    val footerView = rv?.layoutManager?.findViewByPosition(currentListSize)
-                                    if (footerView != null) {
-                                        footerView.requestFocus()
-                                    } else {
-                                        rv?.smoothScrollToPosition(currentListSize)
-                                    }
-                                }
-                                return@setOnKeyListener true
-                            }
-                        }
-                    }
-                } else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && event.action == KeyEvent.ACTION_DOWN) {
-                    if (onFocusLeft?.invoke(view) == true) {
-                        return@setOnKeyListener true
-                    }
-                }
-                false
-            }
-        } else if (holder is FooterViewHolder) {
-            holder.itemView.setOnKeyListener { view, keyCode, event ->
+            val footer = FooterViewHolder(inflater.inflate(R.layout.item_end_of_list, parent, false))
+            footer.itemView.setOnKeyListener { view, keyCode, event ->
                 if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
                     return@setOnKeyListener true
                 } else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && event.action == KeyEvent.ACTION_DOWN) {
@@ -156,6 +61,77 @@ class MovieAdapter(
                 }
                 false
             }
+            return footer
+        }
+
+        val holder = MovieViewHolder(inflater.inflate(R.layout.item_movie, parent, false))
+        holder.itemView.isFocusable = true
+        holder.itemView.isClickable = true
+
+        holder.itemView.setOnClickListener {
+            val pos = holder.bindingAdapterPosition
+            if (pos in differ.currentList.indices) onMovieClick(differ.currentList[pos])
+        }
+
+        holder.itemView.setOnFocusChangeListener { view, hasFocus ->
+            val scale = if (hasFocus) 1.06f else 1.0f
+            view.animate()
+                .scaleX(scale)
+                .scaleY(scale)
+                .translationZ(if (hasFocus) 12f else 0f)
+                .setInterpolator(focusInterpolator)
+                .setDuration(160)
+                .start()
+        }
+
+        holder.itemView.setOnKeyListener { view, keyCode, event ->
+            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                val pos = holder.bindingAdapterPosition
+                val currentListSize = differ.currentList.size
+                if (pos != RecyclerView.NO_POSITION && currentListSize > 0) {
+                    val isLastRow = (pos / SPAN_COUNT) == ((currentListSize - 1) / SPAN_COUNT)
+                    if (isLastRow) {
+                        if (isEndOfList && event.action == KeyEvent.ACTION_DOWN) {
+                            val rv = view.parent as? RecyclerView
+                            val footerView = rv?.layoutManager?.findViewByPosition(currentListSize)
+                            if (footerView != null) {
+                                footerView.requestFocus()
+                            } else {
+                                rv?.smoothScrollToPosition(currentListSize)
+                            }
+                        }
+                        return@setOnKeyListener true
+                    }
+                }
+            } else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && event.action == KeyEvent.ACTION_DOWN) {
+                if (onFocusLeft?.invoke(view) == true) {
+                    return@setOnKeyListener true
+                }
+            }
+            false
+        }
+        return holder
+    }
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        if (holder is MovieViewHolder) {
+            val movie = differ.currentList[position]
+            holder.title.text = movie.title
+            CoverLoader.load(holder.poster, movie.cover_url, movie.source, movie.id)
+            differ.currentList.getOrNull(position + PRELOAD_DISTANCE)?.let { ahead ->
+                CoverLoader.preload(holder.poster, ahead.cover_url, ahead.source, ahead.id)
+            }
+        }
+    }
+
+    override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
+        super.onViewRecycled(holder)
+        if (holder is MovieViewHolder) {
+            CoverLoader.clear(holder.poster)
+            holder.itemView.animate().cancel()
+            holder.itemView.scaleX = 1.0f
+            holder.itemView.scaleY = 1.0f
+            holder.itemView.translationZ = 0f
         }
     }
 
@@ -167,4 +143,9 @@ class MovieAdapter(
     }
 
     class FooterViewHolder(view: View) : RecyclerView.ViewHolder(view)
+
+    companion object {
+        const val SPAN_COUNT = 5
+        private const val PRELOAD_DISTANCE = SPAN_COUNT * 2
+    }
 }

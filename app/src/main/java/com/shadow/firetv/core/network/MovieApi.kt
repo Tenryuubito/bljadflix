@@ -1,5 +1,6 @@
 package com.shadow.firetv.core.network
 
+import com.shadow.firetv.core.model.AppVersionResponse
 import com.shadow.firetv.core.model.AuthStatusResponse
 import com.shadow.firetv.core.model.ContinueWatchingItem
 import com.shadow.firetv.core.model.Episode
@@ -106,4 +107,7 @@ interface MovieApi {
     suspend fun triggerIndex(
         @Query("source") source: String? = null
     ): TriggerIndexResponse
+
+    @GET("app/version")
+    suspend fun getAppVersion(): AppVersionResponse
 }

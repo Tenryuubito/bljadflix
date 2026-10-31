@@ -7,7 +7,11 @@ import com.shadow.firetv.core.data.MovieRepository
 import com.shadow.firetv.core.data.MovieRepositoryImpl
 import com.shadow.firetv.core.model.Episode
 import com.shadow.firetv.core.model.ProgressRequest
+import com.shadow.firetv.core.model.StreamResponse
 import com.shadow.firetv.core.network.RetrofitClient
+import com.shadow.firetv.core.source.SourceManager
+import com.shadow.firetv.core.source.StreamingSource
+import com.shadow.firetv.core.stream.HosterLinkResolver
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -40,7 +44,9 @@ sealed interface PlayerEvent {
 }
 
 class PlayerViewModel(
-    private val repository: MovieRepository
+    private val repository: MovieRepository,
+    private val hosterLinkResolver: HosterLinkResolver = HosterLinkResolver(),
+    private val sourceManager: SourceManager = SourceManager.getInstance()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlayerUiState())
@@ -95,7 +101,7 @@ class PlayerViewModel(
             }
             pollCount = 0
 
-            repository.resolveStream(episodeId, _uiState.value.source)
+            resolveStream(episodeId)
                 .onSuccess { res ->
                     _uiState.update {
                         it.copy(
@@ -106,15 +112,44 @@ class PlayerViewModel(
                     }
                 }
                 .onFailure { error ->
+                    val message = error.message?.takeIf { it.isNotBlank() } ?: "Stream konnte nicht geladen werden"
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            errorMessage = error.message ?: "Stream konnte nicht geladen werden"
+                            errorMessage = message
                         )
                     }
+                    _events.emit(PlayerEvent.ShowToast(message))
                     _events.emit(PlayerEvent.FinishActivity)
                 }
         }
+    }
+
+    private suspend fun resolveStream(episodeId: Int): Result<StreamResponse> {
+        val sourceId = _uiState.value.source?.takeIf { it.isNotBlank() } ?: sourceManager.getSelectedSource().id
+        val onDeviceFirst = sourceId.equals(StreamingSource.ANIWORLD.id, ignoreCase = true)
+
+        val first = if (onDeviceFirst) resolveOnDevice(episodeId) else repository.resolveStream(episodeId, _uiState.value.source)
+        if (first.isSuccess) return first
+
+        val second = if (onDeviceFirst) repository.resolveStream(episodeId, _uiState.value.source) else resolveOnDevice(episodeId)
+        return if (second.isSuccess) second else first
+    }
+
+    private suspend fun resolveOnDevice(episodeId: Int): Result<StreamResponse> {
+        val episodeUrl = findEpisodeUrl(episodeId)
+            ?: return Result.failure(IllegalStateException("Episode nicht gefunden"))
+        return hosterLinkResolver.resolve(episodeUrl)
+    }
+
+    private suspend fun findEpisodeUrl(episodeId: Int): String? {
+        _uiState.value.episodesList.firstOrNull { it.id == episodeId }?.episode_url?.let { return it }
+        val contentId = _uiState.value.contentId
+        if (contentId == -1) return null
+        return repository.getEpisodes(contentId, _uiState.value.source).getOrNull()
+            ?.values?.flatten()
+            ?.firstOrNull { it.id == episodeId }
+            ?.episode_url
     }
 
     fun updateProgressState(currentTime: Float, duration: Float, isPaused: Boolean, isEnded: Boolean) {

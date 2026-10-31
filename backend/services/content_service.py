@@ -97,7 +97,7 @@ class ContentService:
         with self.db.get_user_connection(row_factory=True) as u_conn:
             u_cursor = u_conn.cursor()
             u_cursor.execute('''
-                SELECT episode_id, is_completed, progress_seconds, last_watched_at
+                SELECT episode_id, is_completed, progress_seconds, duration_seconds, last_watched_at
                 FROM watch_progress
                 WHERE user_id = ? AND source = ? AND content_id = ?
             ''', (user_id, clean_source, content_id))
@@ -116,6 +116,7 @@ class ContentService:
                 prog = user_progress.get(ep_id, {})
                 ep_dict["is_completed"] = bool(prog.get("is_completed", False))
                 ep_dict["progress_seconds"] = float(prog.get("progress_seconds", 0.0))
+                ep_dict["duration_seconds"] = float(prog.get("duration_seconds") or 0.0)
                 ep_dict["last_watched_at"] = float(prog.get("last_watched_at", 0.0))
                 
                 s_num = ep_dict["season_number"]

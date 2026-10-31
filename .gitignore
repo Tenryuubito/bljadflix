@@ -61,6 +61,9 @@ config.json
 # Backend APK distribution folder
 backend/updates/
 
+# Backend cover cache
+backend/image_cache/
+
 # Signing keys
 *.jks
 *.keystore

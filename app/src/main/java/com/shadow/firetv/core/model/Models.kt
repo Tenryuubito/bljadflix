@@ -35,7 +35,9 @@ data class Episode(
     val url: String,
     val is_completed: Boolean = false,
     val progress_seconds: Float = 0f,
-    val last_watched_at: Double = 0.0
+    val duration_seconds: Float = 0f,
+    val last_watched_at: Double = 0.0,
+    val episode_url: String? = null
 )
 
 data class WatchlistRequest(
@@ -94,4 +96,14 @@ data class AuthStatusResponse(
 data class TriggerIndexResponse(
     val status: String,
     val source: String? = null
+)
+
+data class AppVersionResponse(
+    val mainApp: MainAppVersion
+)
+
+data class MainAppVersion(
+    val versionCode: Int,
+    val versionName: String,
+    val changelog: String? = null
 )

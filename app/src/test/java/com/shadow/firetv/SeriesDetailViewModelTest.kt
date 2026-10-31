@@ -59,6 +59,29 @@ class SeriesDetailViewModelTest {
     }
 
     @Test
+    fun `refreshEpisodes keeps selected season and updates progress`() = runTest {
+        val initialMap = mapOf(
+            "1" to listOf(Episode(101, 1, "Pilot", "http://ep1")),
+            "2" to listOf(Episode(201, 1, "S2 Pilot", "http://ep3"))
+        )
+        val refreshedMap = mapOf(
+            "1" to listOf(Episode(101, 1, "Pilot", "http://ep1")),
+            "2" to listOf(Episode(201, 1, "S2 Pilot", "http://ep3", progress_seconds = 300f, duration_seconds = 1200f, last_watched_at = 500.0))
+        )
+        coEvery { repository.getWatchlistStatus(1) } returns Result.success(WatchlistStatus(is_watchlisted = false))
+        coEvery { repository.getEpisodes(1) } returnsMany listOf(Result.success(initialMap), Result.success(refreshedMap))
+
+        viewModel.initData(1, "Test Series", "Desc", "Genre", "coverUrl")
+        viewModel.selectSeason("2")
+        viewModel.refreshEpisodes()
+
+        val state = viewModel.uiState.value
+        assertEquals("2", state.selectedSeason)
+        assertEquals(300f, state.currentEpisodes.first().progress_seconds)
+        assertEquals(201, state.continueEpisode?.id)
+    }
+
+    @Test
     fun `toggleWatchlist toggles state and calls repository`() = runTest {
         coEvery { repository.getWatchlistStatus(5) } returns Result.success(WatchlistStatus(is_watchlisted = false))
         coEvery { repository.getEpisodes(5) } returns Result.success(emptyMap())

@@ -1,9 +1,11 @@
 package com.shadow.firetv
 
 import android.annotation.SuppressLint
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.TextUtils
 import android.view.KeyEvent
 import android.view.View
 import android.webkit.WebChromeClient
@@ -112,6 +114,8 @@ class PlayerActivity : AppCompatActivity() {
                 startPolling()
                 view?.evaluateJavascript(
                     """
+                    if (!window.__bljadflixInjected) {
+                    window.__bljadflixInjected = true;
                     setInterval(function() {
                         window.open = function() { return null; };
                         
@@ -147,6 +151,7 @@ class PlayerActivity : AppCompatActivity() {
                             video.style.background = 'black';
                         }
                     }, 500);
+                    }
                 """.trimIndent(), null
                 )
             }
@@ -163,7 +168,7 @@ class PlayerActivity : AppCompatActivity() {
                         if (state.streamUrl != null && state.streamUrl != lastLoadedUrl) {
                             lastLoadedUrl = state.streamUrl
                             webView.evaluateJavascript("window.__videoEnded = '0'; window.__userHasPaused = false;", null)
-                            webView.loadUrl(state.streamUrl, state.streamHeaders)
+                            loadStream(state.streamUrl, state.streamHeaders)
                             webView.requestFocus()
                         }
 
@@ -186,6 +191,19 @@ class PlayerActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun loadStream(url: String, headers: Map<String, String>) {
+        val path = Uri.parse(url).path.orEmpty().lowercase(Locale.ROOT)
+        if (!path.endsWith(".m3u8") && !path.endsWith(".mp4")) {
+            webView.loadUrl(url, headers)
+            return
+        }
+        val src = TextUtils.htmlEncode(url)
+        val html = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width\"></head>" +
+            "<body style=\"margin:0;background:#000\"><video src=\"$src\" autoplay playsinline " +
+            "style=\"width:100vw;height:100vh;background:#000\"></video></body></html>"
+        webView.loadDataWithBaseURL(headers["Referer"] ?: url, html, "text/html", "utf-8", null)
     }
 
     private fun startPolling() {

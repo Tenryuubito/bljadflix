@@ -8,7 +8,8 @@ data class AppVersionInfo(
 data class ComponentVersion(
     val versionCode: Int,
     val versionName: String,
-    val packageName: String
+    val packageName: String,
+    val downloadUrl: String? = null
 )
 
 data class MainAppVersion(

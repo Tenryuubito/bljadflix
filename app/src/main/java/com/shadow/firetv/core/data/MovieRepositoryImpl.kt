@@ -1,5 +1,6 @@
 package com.shadow.firetv.core.data
 
+import com.shadow.firetv.core.model.AppVersionResponse
 import com.shadow.firetv.core.model.AuthStatusResponse
 import com.shadow.firetv.core.model.ContinueWatchingItem
 import com.shadow.firetv.core.model.Episode
@@ -118,4 +119,7 @@ class MovieRepositoryImpl(
 
     override suspend fun triggerIndex(source: String?): Result<TriggerIndexResponse> =
         safeApiCall { api.triggerIndex(source) }
+
+    override suspend fun getAppVersion(): Result<AppVersionResponse> =
+        safeApiCall { api.getAppVersion() }
 }

@@ -7,4 +7,8 @@
     <string name="btn_install_update">Haupt-App Installieren / Aktualisieren</string>
     <string name="btn_launch">Bljadflix Starten</string>
     <string name="btn_retry">Erneut versuchen</string>
+    <string name="btn_update_launcher">Launcher aktualisieren</string>
+    <string name="btn_install_now">Jetzt installieren</string>
+    <string name="btn_not_ready">Nicht bereit</string>
+    <string name="version_info">Bljadflix: %1$s | verfügbar: v%2$s\nLauncher: v%3$s | verfügbar: v%4$s</string>
 </resources>

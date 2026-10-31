@@ -23,13 +23,14 @@ import androidx.recyclerview.widget.AsyncListDiffer
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.bumptech.glide.Glide
+import com.shadow.firetv.core.image.CoverLoader
 import com.shadow.firetv.core.model.Episode
 import com.shadow.firetv.core.theme.ThemeManager
 import com.shadow.firetv.feature.details.SeriesDetailUiState
 import com.shadow.firetv.feature.details.SeriesDetailViewModel
 import kotlinx.coroutines.launch
 import java.util.Locale
+import kotlin.math.roundToInt
 
 class SeriesDetailActivity : AppCompatActivity() {
     private lateinit var spinnerSeasons: Spinner
@@ -37,7 +38,10 @@ class SeriesDetailActivity : AppCompatActivity() {
     private lateinit var progressBar: ProgressBar
     private lateinit var btnWatchlist: Button
     private lateinit var btnContinueWatching: Button
+    private lateinit var tvEpisodesMessage: TextView
+    private var hasResumedOnce = false
     private lateinit var epAdapter: EpisodeAdapter
+    private var shownSeasonItems: List<String> = emptyList()
 
     private val viewModel: SeriesDetailViewModel by viewModels { SeriesDetailViewModel.Factory() }
 
@@ -61,26 +65,34 @@ class SeriesDetailActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.tv_title).text = title
         findViewById<TextView>(R.id.tv_description).text = description
 
-        val ivCover = findViewById<ImageView>(R.id.iv_cover)
-        if (!coverUrl.isNullOrEmpty()) {
-            Glide.with(this)
-                .load(coverUrl)
-                .into(ivCover)
-        }
+        CoverLoader.load(findViewById(R.id.iv_cover), coverUrl, source, contentId)
 
         spinnerSeasons = findViewById(R.id.spinner_seasons)
         rvEpisodes = findViewById(R.id.rv_episodes)
         progressBar = findViewById(R.id.progress_bar)
         btnWatchlist = findViewById(R.id.btn_watchlist_toggle)
         btnContinueWatching = findViewById(R.id.btn_continue_watching)
+        tvEpisodesMessage = findViewById(R.id.tv_episodes_message)
 
         setupButtonFocusAnimations()
 
         rvEpisodes.layoutManager = LinearLayoutManager(this)
+        rvEpisodes.itemAnimator = null
         epAdapter = EpisodeAdapter { episode ->
             startPlayer(episode.id, contentId)
         }
         rvEpisodes.adapter = epAdapter
+
+        spinnerSeasons.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val seasons = viewModel.uiState.value.seasonsList
+                if (position in seasons.indices && seasons[position] != viewModel.uiState.value.selectedSeason) {
+                    viewModel.selectSeason(seasons[position])
+                }
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
         btnWatchlist.setOnClickListener {
             viewModel.toggleWatchlist()
@@ -88,6 +100,12 @@ class SeriesDetailActivity : AppCompatActivity() {
 
         viewModel.initData(contentId, title, description, genre, coverUrl, source)
         observeViewModel()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (hasResumedOnce) viewModel.refreshEpisodes()
+        hasResumedOnce = true
     }
 
     private fun setupButtonFocusAnimations() {
@@ -114,6 +132,10 @@ class SeriesDetailActivity : AppCompatActivity() {
 
     private fun renderState(state: SeriesDetailUiState) {
         progressBar.visibility = if (state.isLoading) View.VISIBLE else View.GONE
+
+        val episodesMessage = state.errorMessage
+        tvEpisodesMessage.visibility = if (!state.isLoading && episodesMessage != null) View.VISIBLE else View.GONE
+        tvEpisodesMessage.text = episodesMessage
 
         if (state.isWatchlisted) {
             btnWatchlist.text = getString(R.string.btn_watchlist_added)
@@ -166,23 +188,16 @@ class SeriesDetailActivity : AppCompatActivity() {
                 }
             }
 
-            val arrayAdapter = ArrayAdapter(this, R.layout.item_spinner_selected, spinnerItems)
-            arrayAdapter.setDropDownViewResource(R.layout.item_spinner_dropdown)
-            spinnerSeasons.adapter = arrayAdapter
-
-            val selectedIndex = state.seasonsList.indexOf(state.selectedSeason)
-            if (selectedIndex != -1) {
-                spinnerSeasons.setSelection(selectedIndex, false)
+            if (spinnerItems != shownSeasonItems) {
+                shownSeasonItems = spinnerItems
+                val arrayAdapter = ArrayAdapter(this, R.layout.item_spinner_selected, spinnerItems)
+                arrayAdapter.setDropDownViewResource(R.layout.item_spinner_dropdown)
+                spinnerSeasons.adapter = arrayAdapter
             }
 
-            spinnerSeasons.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                    if (position >= 0 && position < state.seasonsList.size) {
-                        viewModel.selectSeason(state.seasonsList[position])
-                    }
-                }
-
-                override fun onNothingSelected(parent: AdapterView<*>?) {}
+            val selectedIndex = state.seasonsList.indexOf(state.selectedSeason)
+            if (selectedIndex != -1 && spinnerSeasons.selectedItemPosition != selectedIndex) {
+                spinnerSeasons.setSelection(selectedIndex, false)
             }
         }
     }
@@ -213,22 +228,25 @@ class EpisodeAdapter(
         differ.submitList(newEpisodes)
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) = ViewHolder(
-        LayoutInflater.from(parent.context).inflate(R.layout.item_episode, parent, false)
-    )
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+        val holder = ViewHolder(
+            LayoutInflater.from(parent.context).inflate(R.layout.item_episode, parent, false)
+        )
+        holder.itemView.setOnFocusChangeListener { v, hasFocus ->
+            val scale = if (hasFocus) 1.02f else 1.0f
+            v.animate().scaleX(scale).scaleY(scale).translationZ(if (hasFocus) 6f else 0f).setDuration(120).start()
+        }
+        holder.itemView.setOnClickListener {
+            val pos = holder.bindingAdapterPosition
+            if (pos in differ.currentList.indices) onEpisodeClick(differ.currentList[pos])
+        }
+        return holder
+    }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val ep = differ.currentList[position]
         holder.num.text = String.format(Locale.getDefault(), "EP %d", ep.episode_number)
         holder.title.text = ep.title
-
-        holder.itemView.setOnFocusChangeListener { v, hasFocus ->
-            if (hasFocus) {
-                v.animate().scaleX(1.02f).scaleY(1.02f).translationZ(6f).setDuration(120).start()
-            } else {
-                v.animate().scaleX(1.0f).scaleY(1.0f).translationZ(0f).setDuration(120).start()
-            }
-        }
 
         if (ep.is_completed) {
             holder.ivCheck.visibility = View.VISIBLE
@@ -237,15 +255,17 @@ class EpisodeAdapter(
         } else if (ep.progress_seconds > 0) {
             holder.ivCheck.visibility = View.GONE
             holder.pbProgress.visibility = View.VISIBLE
-            holder.pbProgress.isIndeterminate = true
+            holder.pbProgress.progress = if (ep.duration_seconds > 0) {
+                (ep.progress_seconds / ep.duration_seconds * 100).roundToInt().coerceIn(1, 100)
+            } else {
+                PROGRESS_UNKNOWN
+            }
             holder.title.alpha = 1.0f
         } else {
             holder.ivCheck.visibility = View.GONE
             holder.pbProgress.visibility = View.GONE
             holder.title.alpha = 1.0f
         }
-
-        holder.itemView.setOnClickListener { onEpisodeClick(ep) }
     }
 
     override fun getItemCount() = differ.currentList.size
@@ -255,5 +275,9 @@ class EpisodeAdapter(
         val title: TextView = view.findViewById(R.id.tv_ep_title)
         val ivCheck: ImageView = view.findViewById(R.id.iv_check)
         val pbProgress: ProgressBar = view.findViewById(R.id.pb_ep_progress)
+    }
+
+    companion object {
+        private const val PROGRESS_UNKNOWN = 50
     }
 }

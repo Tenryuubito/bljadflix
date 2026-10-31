@@ -98,6 +98,17 @@ class SeriesDetailViewModel(
         }
     }
 
+    fun refreshEpisodes() {
+        val contentId = _uiState.value.contentId
+        if (contentId == -1 || _uiState.value.isLoading) return
+        viewModelScope.launch {
+            repository.getEpisodes(contentId, _uiState.value.source)
+                .onSuccess { seasonsMap ->
+                    if (seasonsMap.isNotEmpty()) processLoadedEpisodes(seasonsMap, keepSelectedSeason = true)
+                }
+        }
+    }
+
     private suspend fun reindexAndReloadEpisodes(contentId: Int, fallbackMap: Map<String, List<Episode>>) {
         try {
             repository.reindexSeries(contentId, _uiState.value.source)
@@ -108,14 +119,19 @@ class SeriesDetailViewModel(
             .onFailure { processLoadedEpisodes(fallbackMap) }
     }
 
-    private fun processLoadedEpisodes(seasonsMap: Map<String, List<Episode>>) {
+    private fun processLoadedEpisodes(seasonsMap: Map<String, List<Episode>>, keepSelectedSeason: Boolean = false) {
         val seasonsList = seasonsMap.keys.sortedWith(Comparator { a, b ->
             val numA = a.filter { it.isDigit() }.toIntOrNull()
             val numB = b.filter { it.isDigit() }.toIntOrNull()
             if (numA != null && numB != null) numA.compareTo(numB)
             else a.compareTo(b)
         })
-        val selectedSeason = seasonsList.firstOrNull() ?: ""
+        val previousSeason = _uiState.value.selectedSeason
+        val selectedSeason = if (keepSelectedSeason && previousSeason in seasonsList) {
+            previousSeason
+        } else {
+            seasonsList.firstOrNull() ?: ""
+        }
         val currentEpisodes = seasonsMap[selectedSeason] ?: emptyList()
 
         val (continueEp, continueSeason) = calculateContinueWatchingEpisode(seasonsList, seasonsMap)

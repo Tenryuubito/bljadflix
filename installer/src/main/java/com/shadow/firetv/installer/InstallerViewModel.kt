@@ -8,8 +8,11 @@ import androidx.lifecycle.viewModelScope
 import com.shadow.firetv.installer.data.AppVersionInfo
 import com.shadow.firetv.installer.network.InstallerApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -18,6 +21,23 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.io.File
 import java.io.FileOutputStream
+
+enum class InstallerAction {
+    UPDATE_LAUNCHER,
+    INSTALL_MAIN_APP,
+    LAUNCH_MAIN_APP
+}
+
+enum class AutoMode {
+    FULL,
+    LAUNCH_ONLY,
+    NONE
+}
+
+sealed interface InstallerEvent {
+    data class InstallApk(val file: File) : InstallerEvent
+    object LaunchMainApp : InstallerEvent
+}
 
 data class InstallerUiState(
     val statusMessage: String = "Initialisiere Installer...",
@@ -28,6 +48,8 @@ data class InstallerUiState(
     val serverVersionInfo: AppVersionInfo? = null,
     val errorMessage: String? = null,
     val downloadedApkFile: File? = null,
+    val downloadedFor: InstallerAction? = null,
+    val pendingAction: InstallerAction? = null,
     val readyToLaunch: Boolean = false,
     val canInstallOrUpdate: Boolean = false
 )
@@ -36,6 +58,9 @@ class InstallerViewModel : ViewModel() {
 
     private val _uiState = MutableStateFlow(InstallerUiState())
     val uiState: StateFlow<InstallerUiState> = _uiState.asStateFlow()
+
+    private val _events = MutableSharedFlow<InstallerEvent>(extraBufferCapacity = 1)
+    val events: SharedFlow<InstallerEvent> = _events.asSharedFlow()
 
     private fun getApi(baseUrl: String): InstallerApi {
         val cleanUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
@@ -46,7 +71,13 @@ class InstallerViewModel : ViewModel() {
             .create(InstallerApi::class.java)
     }
 
-    fun checkStatusAndVersions(context: Context, baseUrl: String) {
+    fun checkStatusAndVersions(
+        context: Context,
+        baseUrl: String,
+        launcherVersionCode: Int,
+        autoMode: AutoMode = AutoMode.NONE
+    ) {
+        if (_uiState.value.isDownloading) return
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
@@ -57,10 +88,10 @@ class InstallerViewModel : ViewModel() {
             }
 
             try {
-                val api = getApi(baseUrl)
-                val response = api.getVersionInfo()
+                val response = getApi(baseUrl).getVersionInfo()
+                val versionInfo = response.body()
 
-                if (!response.isSuccessful || response.body() == null) {
+                if (!response.isSuccessful || versionInfo == null) {
                     _uiState.update {
                         it.copy(
                             isChecking = false,
@@ -71,31 +102,29 @@ class InstallerViewModel : ViewModel() {
                     return@launch
                 }
 
-                val versionInfo = response.body()!!
-                val targetPackageName = versionInfo.mainApp.packageName
-
-                val installedCode = getInstalledVersionCode(context, targetPackageName)
-                val isInstalled = installedCode != null
-                val serverCode = versionInfo.mainApp.versionCode
-                val isUpToDate = isInstalled && (installedCode!! >= serverCode)
-
-                val status = when {
-                    !isInstalled -> "Bljadflix Client ist NICHT installiert (v${versionInfo.mainApp.versionName} verfügbar)"
-                    !isUpToDate -> "Update verfügbar: v${versionInfo.mainApp.versionName} (Installiert: v$installedCode)"
-                    else -> "Bljadflix Client v${versionInfo.mainApp.versionName} ist auf dem neuesten Stand"
-                }
+                val installedCode = getInstalledVersionCode(context, versionInfo.mainApp.packageName)
+                val action = decideAction(versionInfo, launcherVersionCode, installedCode)
 
                 _uiState.update {
                     it.copy(
                         isChecking = false,
-                        statusMessage = status,
+                        statusMessage = statusFor(action, versionInfo, installedCode),
                         installedVersionCode = installedCode,
                         serverVersionInfo = versionInfo,
-                        readyToLaunch = isUpToDate,
-                        canInstallOrUpdate = !isUpToDate
+                        pendingAction = action,
+                        readyToLaunch = action == InstallerAction.LAUNCH_MAIN_APP,
+                        canInstallOrUpdate = action != InstallerAction.LAUNCH_MAIN_APP
                     )
                 }
 
+                val runAutomatically = when (autoMode) {
+                    AutoMode.FULL -> true
+                    AutoMode.LAUNCH_ONLY -> action == InstallerAction.LAUNCH_MAIN_APP
+                    AutoMode.NONE -> false
+                }
+                if (runAutomatically) {
+                    performPendingAction(context, baseUrl)
+                }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -108,6 +137,36 @@ class InstallerViewModel : ViewModel() {
         }
     }
 
+    fun performPendingAction(context: Context, baseUrl: String) {
+        val state = _uiState.value
+        if (state.isChecking || state.isDownloading) return
+        val action = state.pendingAction ?: return
+        state.downloadedApkFile?.takeIf { state.downloadedFor == action && it.exists() }?.let {
+            _events.tryEmit(InstallerEvent.InstallApk(it))
+            return
+        }
+        val info = state.serverVersionInfo ?: return
+        when (action) {
+            InstallerAction.UPDATE_LAUNCHER -> downloadApk(
+                context,
+                baseUrl,
+                action,
+                info.launcher.downloadUrl ?: DEFAULT_LAUNCHER_DOWNLOAD_URL,
+                LAUNCHER_APK_NAME,
+                "Lade neuen Bljadflix Launcher v${info.launcher.versionName} herunter..."
+            )
+            InstallerAction.INSTALL_MAIN_APP -> downloadApk(
+                context,
+                baseUrl,
+                action,
+                info.mainApp.downloadUrl,
+                MAIN_APP_APK_NAME,
+                "Lade Bljadflix v${info.mainApp.versionName} herunter..."
+            )
+            InstallerAction.LAUNCH_MAIN_APP -> _events.tryEmit(InstallerEvent.LaunchMainApp)
+        }
+    }
+
     private fun getInstalledVersionCode(context: Context, packageName: String): Int? {
         return try {
             val pm = context.packageManager
@@ -117,71 +176,69 @@ class InstallerViewModel : ViewModel() {
             } else {
                 @Suppress("DEPRECATION")
                 val pkgInfo = pm.getPackageInfo(packageName, 0)
-                @Suppress("DEPRECATION")
-                pkgInfo.versionCode
+                pkgInfo.longVersionCode.toInt()
             }
         } catch (e: PackageManager.NameNotFoundException) {
             null
         }
     }
 
-    fun downloadMainAppApk(context: Context, baseUrl: String) {
-        val serverInfo = _uiState.value.serverVersionInfo ?: return
-        val downloadRelativeUrl = serverInfo.mainApp.downloadUrl
-
+    private fun downloadApk(
+        context: Context,
+        baseUrl: String,
+        action: InstallerAction,
+        downloadUrl: String,
+        fileName: String,
+        message: String
+    ) {
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
                     isDownloading = true,
                     downloadProgress = 0,
-                    statusMessage = "Lade Bljadflix Haupt-App herunter...",
+                    statusMessage = message,
                     errorMessage = null
                 )
             }
 
             try {
-                val fullUrl = if (downloadRelativeUrl.startsWith("http")) {
-                    downloadRelativeUrl
-                } else {
-                    val cleanBase = if (baseUrl.endsWith("/")) baseUrl.dropLast(1) else baseUrl
-                    val cleanRel = if (downloadRelativeUrl.startsWith("/")) downloadRelativeUrl else "/$downloadRelativeUrl"
-                    "$cleanBase$cleanRel"
-                }
+                val response = getApi(baseUrl).downloadApk(resolveUrl(baseUrl, downloadUrl))
+                val body = response.body()
 
-                val api = getApi(baseUrl)
-                val response = api.downloadApk(fullUrl)
-
-                if (!response.isSuccessful || response.body() == null) {
+                if (!response.isSuccessful || body == null) {
                     _uiState.update {
                         it.copy(
                             isDownloading = false,
-                            errorMessage = "Download fehlgeschlagen (HTTP ${response.code()})"
+                            statusMessage = "Download fehlgeschlagen",
+                            errorMessage = "HTTP ${response.code()}"
                         )
                     }
                     return@launch
                 }
 
-                val body = response.body()!!
-                val apkFile = File(context.externalCacheDir ?: context.cacheDir, "bljadflix-main-update.apk")
+                val apkFile = File(context.externalCacheDir ?: context.cacheDir, fileName)
 
                 withContext(Dispatchers.IO) {
+                    apkFile.delete()
                     body.byteStream().use { inputStream ->
                         FileOutputStream(apkFile).use { outputStream ->
-                            val buffer = ByteArray(8 * 1024)
+                            val buffer = ByteArray(64 * 1024)
                             val contentLength = body.contentLength()
-                            var bytesRead: Int
                             var totalRead = 0L
-
-                            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                            var lastProgress = -1
+                            while (true) {
+                                val bytesRead = inputStream.read(buffer)
+                                if (bytesRead == -1) break
                                 outputStream.write(buffer, 0, bytesRead)
                                 totalRead += bytesRead
-
                                 if (contentLength > 0) {
                                     val progress = ((totalRead * 100) / contentLength).toInt()
-                                    _uiState.update { state -> state.copy(downloadProgress = progress) }
+                                    if (progress != lastProgress) {
+                                        lastProgress = progress
+                                        _uiState.update { state -> state.copy(downloadProgress = progress) }
+                                    }
                                 }
                             }
-                            outputStream.flush()
                         }
                     }
                 }
@@ -191,18 +248,56 @@ class InstallerViewModel : ViewModel() {
                         isDownloading = false,
                         downloadProgress = 100,
                         downloadedApkFile = apkFile,
-                        statusMessage = "Download abgeschlossen! Bereit zur Installation."
+                        downloadedFor = action,
+                        statusMessage = "Download abgeschlossen. Bitte Installation bestätigen."
                     )
                 }
-
+                _events.tryEmit(InstallerEvent.InstallApk(apkFile))
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
                         isDownloading = false,
-                        errorMessage = "Download-Fehler: ${e.localizedMessage}"
+                        statusMessage = "Download fehlgeschlagen",
+                        errorMessage = e.localizedMessage ?: "Unbekannter Netzwerkfehler"
                     )
                 }
             }
         }
+    }
+
+    companion object {
+        private const val DEFAULT_LAUNCHER_DOWNLOAD_URL = "/app/download/launcher"
+        private const val LAUNCHER_APK_NAME = "bljadflix-launcher-update.apk"
+        private const val MAIN_APP_APK_NAME = "bljadflix-main-update.apk"
+
+        fun decideAction(
+            info: AppVersionInfo,
+            launcherVersionCode: Int,
+            installedMainVersionCode: Int?
+        ): InstallerAction = when {
+            info.launcher.versionCode > launcherVersionCode -> InstallerAction.UPDATE_LAUNCHER
+            installedMainVersionCode == null || installedMainVersionCode < info.mainApp.versionCode ->
+                InstallerAction.INSTALL_MAIN_APP
+            else -> InstallerAction.LAUNCH_MAIN_APP
+        }
+
+        fun resolveUrl(baseUrl: String, downloadUrl: String): String {
+            if (downloadUrl.startsWith("http")) return downloadUrl
+            return baseUrl.trimEnd('/') + "/" + downloadUrl.trimStart('/')
+        }
+
+        private fun statusFor(action: InstallerAction, info: AppVersionInfo, installedCode: Int?): String =
+            when (action) {
+                InstallerAction.UPDATE_LAUNCHER ->
+                    "Neuer Launcher verfügbar: v${info.launcher.versionName}"
+                InstallerAction.INSTALL_MAIN_APP ->
+                    if (installedCode == null) {
+                        "Bljadflix ist nicht installiert (v${info.mainApp.versionName} verfügbar)"
+                    } else {
+                        "Update verfügbar: v${info.mainApp.versionName} (installiert: Build $installedCode)"
+                    }
+                InstallerAction.LAUNCH_MAIN_APP ->
+                    "Bljadflix v${info.mainApp.versionName} ist auf dem neuesten Stand"
+            }
     }
 }
