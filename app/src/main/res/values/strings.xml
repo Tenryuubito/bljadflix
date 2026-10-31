@@ -45,6 +45,7 @@
     <string name="btn_reindex_running">Suche nach neuen Folgen…</string>
     <string name="episode_remaining">Noch %1$d Min.</string>
     <string name="episode_continue_badge">WEITER</string>
+    <string name="episode_number_label">EP %1$d</string>
 
     <string name="btn_retry">Erneut versuchen</string>
     <string name="dialog_cancel">Abbrechen</string>
