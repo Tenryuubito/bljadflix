@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Bljadflix</string>
+    <string name="login_subtitle">Bitte mit Benutzernamen und Passwort anmelden</string>
+    <string name="login_username">Benutzername</string>
+    <string name="login_password">Passwort</string>
+    <string name="login_submit">Anmelden</string>
 
 
     <string name="btn_watchlist_add">Zur Watchlist hinzufügen</string>
