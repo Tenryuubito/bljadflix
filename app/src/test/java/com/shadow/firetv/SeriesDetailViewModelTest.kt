@@ -53,7 +53,6 @@ class SeriesDetailViewModelTest {
             assertEquals(listOf("1"), state.seasonsList)
             assertEquals("1", state.selectedSeason)
             assertEquals(2, state.currentEpisodes.size)
-            // Continue episode should be Ep 2 (since Pilot was completed)
             assertEquals(102, state.continueEpisode?.id)
             assertFalse(state.isLoading)
         }

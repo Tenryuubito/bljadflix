@@ -1,6 +1,7 @@
 import os
 import json
 import sys
+from typing import Optional
 
 DEFAULT_SOURCES = {
     "aniworld": {
@@ -23,24 +24,22 @@ DEFAULT_SOURCES = {
 class Config:
     def __init__(self, config_path: str = None):
         if config_path is None:
+            config_path = os.environ.get("BLJADFLIX_CONFIG")
+        if config_path is None:
             config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.json")
         self.config_path = config_path
         self.data = self._load_config()
 
     def _load_config(self) -> dict:
         if not os.path.exists(self.config_path):
-            print("FEHLER: config.json nicht gefunden! Bitte führe zuerst 'python setup.py' im Hauptverzeichnis aus.")
+            print("FEHLER: config.json nicht gefunden! Bitte im Projekt-Hauptverzeichnis anlegen (siehe setup_server.sh).")
             sys.exit(1)
         with open(self.config_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        if "streaming_source_ip" not in data or "backend_port" not in data:
-            print("FEHLER: config.json ist unvollständig. Bitte 'python setup.py' erneut ausführen.")
+        if "backend_port" not in data:
+            print("FEHLER: config.json ist unvollständig. Pflichtfeld: backend_port.")
             sys.exit(1)
         return data
-
-    @property
-    def streaming_source_ip(self) -> str:
-        return self.data["streaming_source_ip"]
 
     @property
     def backend_port(self) -> int:
@@ -63,6 +62,10 @@ class Config:
     @property
     def default_source(self) -> str:
         return self.data.get("default_source", "aniworld")
+
+    @property
+    def admin_password(self) -> Optional[str]:
+        return self.data.get("admin_password") or None
 
     @property
     def indexer_interval_hours(self) -> int:

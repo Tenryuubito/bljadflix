@@ -1,7 +1,5 @@
 import concurrent.futures
-import json
 import re
-import sys
 from typing import Tuple, Optional
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
@@ -81,7 +79,6 @@ class FilmoIndexer(BaseIndexer):
 
             episodes_data = []
 
-            # Check if this page contains season/episode structure for series
             ep_elements = (
                 detail_soup.find_all('a', href=re.compile(r'/(?:season|episode|staffel|folge|series|tv)/', re.I)) or
                 detail_soup.find_all('div', class_=re.compile(r'(?:episode|season|item)', re.I)) or

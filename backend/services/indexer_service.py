@@ -28,7 +28,6 @@ class IndexerService:
         clean = self.db.sanitize_source(source)
         if clean in self.indexers:
             return self.indexers[clean]
-        # Fallback to aniworld or sto
         return self.indexers.get("aniworld") or self.indexers.get("sto")
 
     def process_single_series(self, s_url: str, source: Optional[str] = "aniworld") -> Tuple[str, bool, str]:
@@ -92,7 +91,6 @@ class IndexerService:
         if not content_ids:
             return {"status": "success", "synced_count": 0}
 
-        # Fetch source_page_urls from content db
         urls = []
         with self.db.get_content_connection(clean_source, row_factory=True) as c_conn:
             c_cursor = c_conn.cursor()

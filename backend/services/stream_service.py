@@ -36,7 +36,6 @@ class StreamService:
             cached = cursor.fetchone()
             current_time = time.time()
 
-            # Ignore cache if it expired or if it mistakenly cached the HTML web page URL
             if cached and cached["expires_at"] > current_time and cached["stream_url"] != source_url:
                 return {"stream_url": cached["stream_url"], "headers": COMMON_HEADERS}
 
@@ -56,7 +55,6 @@ class StreamService:
         soup = BeautifulSoup(response.text, 'lxml')
         stream_url = source_url
 
-        # 1. Check for Filmo provider chip / openMint
         chip = soup.find('div', attrs={'data-provider-chip': True}) or soup.find(attrs={'data-p': True})
         if chip and chip.get('data-p'):
             open_mint = f"{origin}/n"
@@ -92,11 +90,9 @@ class StreamService:
             except Exception:
                 pass
 
-        # 2. Check for AniWorld / S.to hoster redirect links (/redirect/12345)
         if stream_url == source_url:
             redirect_href = ""
 
-            # Check redirect links in hoster navs or episode page
             nav_el = (
                 soup.find('ul', class_='hosterSiteDirectNav') or
                 soup.find('div', class_='hosterSiteVideo') or
@@ -122,7 +118,6 @@ class StreamService:
                 except Exception:
                     pass
 
-        # 3. Check for standard iframe or video tags
         if stream_url == source_url:
             iframe = soup.find('iframe')
             if iframe and iframe.get('src') and iframe.get('src') != 'about:blank':
@@ -156,7 +151,6 @@ class StreamService:
                     if v_src:
                         stream_url = urljoin(source_url, v_src)
 
-        # 4. Extract direct media link from hoster page if available
         if stream_url != source_url and not any(ext in stream_url.lower() for ext in ['.m3u8', '.mp4']):
             try:
                 hoster_parsed = urlparse(stream_url)
@@ -175,7 +169,6 @@ class StreamService:
             except Exception:
                 pass
 
-        # Save to video_links
         with self.db.get_content_connection(clean_source) as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM video_links WHERE episode_id = ?", (episode_id,))

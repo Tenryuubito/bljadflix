@@ -2,7 +2,7 @@ import random
 import requests
 import threading
 import time
-from typing import Tuple, List, Optional, Set
+from typing import Tuple, List, Optional
 from database import DatabaseManager
 from config import Config
 from services.indexer_logger import indexer_logger

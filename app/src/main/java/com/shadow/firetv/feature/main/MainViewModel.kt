@@ -70,6 +70,7 @@ class MainViewModel(
     private var syncJob: Job? = null
     private var initJob: Job? = null
     private val maxPages = 5
+    private val maxSyncPolls = 150
     private var lastNonSearchSidebarIndex = 0
 
     init {
@@ -89,14 +90,12 @@ class MainViewModel(
                 )
             }
 
-            // 1. Authentifizierung prüfen
             updateInitProgress(1, 5, "Prüfe Authentifizierung...", 20)
             if (!checkAuthStatusInternal()) {
                 _uiState.update { it.copy(isInitializing = false) }
                 return@launch
             }
 
-            // 2. Kategorien vom Backend-Server laden
             val currentSource = sourceManager.getSelectedSource()
             updateInitProgress(2, 5, "Lade Kategorien von Backend (${currentSource.displayName})...", 40)
 
@@ -113,15 +112,12 @@ class MainViewModel(
             val sidebarItems = baseComponents + genresList
             _uiState.update { it.copy(sidebarItems = sidebarItems, selectedSource = currentSource) }
 
-            // 3. Benutzerdaten synchronisieren
             updateInitProgress(3, 5, "Synchronisiere Benutzerinhalte vom Server...", 60)
             repository.syncUserContent()
 
-            // 4. Startinhalte laden
             updateInitProgress(4, 5, "Lade Startinhalte...", 85)
             fetchInitialContent()
 
-            // 5. Fertigstellen
             updateInitProgress(5, 5, "Initialisierung abgeschlossen", 100)
             delay(100)
 
@@ -493,10 +489,11 @@ class MainViewModel(
     private fun syncAndPollStatus() {
         syncJob?.cancel()
         syncJob = viewModelScope.launch {
-            repository.syncUserContent()
             var wasSyncing = false
-            while (true) {
-                repository.getSyncStatus().onSuccess { status ->
+            repeat(maxSyncPolls) {
+                val result = repository.getSyncStatus()
+                if (result.isFailure) return@launch
+                result.onSuccess { status ->
                     if (status.is_syncing) {
                         wasSyncing = true
                     } else if (wasSyncing) {

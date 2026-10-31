@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 
 data class PlayerUiState(
     val contentId: Int = -1,
+    val source: String? = null,
     val episodeId: Int = -1,
     val streamUrl: String? = null,
     val streamHeaders: Map<String, String> = emptyMap(),
@@ -50,8 +51,8 @@ class PlayerViewModel(
 
     private var pollCount = 0
 
-    fun initPlayer(contentId: Int, episodeId: Int) {
-        _uiState.update { it.copy(contentId = contentId, episodeId = episodeId) }
+    fun initPlayer(contentId: Int, episodeId: Int, source: String? = null) {
+        _uiState.update { it.copy(contentId = contentId, episodeId = episodeId, source = source) }
         if (contentId != -1) {
             loadEpisodesList(contentId)
         }
@@ -64,7 +65,7 @@ class PlayerViewModel(
 
     fun loadEpisodesList(contentId: Int) {
         viewModelScope.launch {
-            repository.getEpisodes(contentId).onSuccess { seasonsMap ->
+            repository.getEpisodes(contentId, _uiState.value.source).onSuccess { seasonsMap ->
                 val sortedSeasons = seasonsMap.keys.sortedWith(Comparator { a, b ->
                     val numA = a.filter { it.isDigit() }.toIntOrNull()
                     val numB = b.filter { it.isDigit() }.toIntOrNull()
@@ -94,7 +95,7 @@ class PlayerViewModel(
             }
             pollCount = 0
 
-            repository.resolveStream(episodeId)
+            repository.resolveStream(episodeId, _uiState.value.source)
                 .onSuccess { res ->
                     _uiState.update {
                         it.copy(
@@ -159,7 +160,6 @@ class PlayerViewModel(
         if (state.isTransitioning) return
         _uiState.update { it.copy(isTransitioning = true) }
 
-        // Save progress for current episode
         val dur = if (state.duration > 0) state.duration else state.maxProgress / 0.9f
         sendProgress(state.maxProgress, dur, isCompleted = true)
 
@@ -187,7 +187,8 @@ class PlayerViewModel(
                 content_id = state.contentId,
                 progress_seconds = currentTime,
                 duration_seconds = duration,
-                is_completed = isCompleted
+                is_completed = isCompleted,
+                source = state.source
             )
             repository.updateProgress(req)
         }

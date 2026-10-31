@@ -5,7 +5,6 @@ def get_dashboard_html() -> str:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bljadflix Backend - Admin Dashboard</title>
-    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -25,9 +24,7 @@ def get_dashboard_html() -> str:
             }
         }
     </script>
-    <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -38,7 +35,6 @@ def get_dashboard_html() -> str:
 </head>
 <body class="bg-darkbg text-slate-100 font-sans min-h-screen flex flex-col">
 
-    <!-- Header / Navbar -->
     <header class="bg-cardbg border-b border-cardborder px-6 py-4 flex flex-wrap items-center justify-between shadow-lg sticky top-0 z-50">
         <div class="flex items-center space-x-3">
             <div class="w-10 h-10 rounded-lg bg-gradient-to-tr from-accentred to-amber-500 flex items-center justify-center font-bold text-xl shadow-md text-white">
@@ -50,7 +46,6 @@ def get_dashboard_html() -> str:
             </div>
         </div>
 
-        <!-- Navigation Tabs -->
         <nav class="flex space-x-1 bg-slate-900/60 p-1 rounded-xl border border-cardborder mt-3 sm:mt-0">
             <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="nav-tab text-xs font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 transition bg-accentred text-white shadow">
                 <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
@@ -77,14 +72,16 @@ def get_dashboard_html() -> str:
                 <span>Gesperrte Geräte</span>
             </button>
         </nav>
+
+        <button onclick="adminLogout()" class="mt-3 sm:mt-0 text-xs font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 text-slate-400 hover:text-white bg-slate-900/60 border border-cardborder transition">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+            <span>Abmelden</span>
+        </button>
     </header>
 
-    <!-- Main Content Container -->
     <main class="flex-1 p-6 max-w-7xl w-full mx-auto space-y-6">
 
-        <!-- TAB 1: DASHBOARD & STATS -->
         <div id="tab-content-dashboard" class="space-y-6">
-            <!-- Stat Cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div class="bg-cardbg border border-cardborder p-5 rounded-2xl shadow flex items-center justify-between">
                     <div>
@@ -131,9 +128,7 @@ def get_dashboard_html() -> str:
                 </div>
             </div>
 
-            <!-- Charts Row 1 -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Timeline Chart -->
                 <div class="lg:col-span-2 bg-cardbg border border-cardborder p-5 rounded-2xl shadow space-y-4">
                     <div class="flex items-center justify-between">
                         <h3 class="font-semibold text-white flex items-center space-x-2">
@@ -146,7 +141,6 @@ def get_dashboard_html() -> str:
                     </div>
                 </div>
 
-                <!-- Source Ratio Doughnut -->
                 <div class="bg-cardbg border border-cardborder p-5 rounded-2xl shadow space-y-4 flex flex-col justify-between">
                     <h3 class="font-semibold text-white flex items-center space-x-2">
                         <i data-lucide="pie-chart" class="w-5 h-5 text-amber-400"></i>
@@ -158,7 +152,6 @@ def get_dashboard_html() -> str:
                 </div>
             </div>
 
-            <!-- Top Watched Content Table -->
             <div class="bg-cardbg border border-cardborder p-5 rounded-2xl shadow space-y-4">
                 <div class="flex items-center justify-between">
                     <h3 class="font-semibold text-white flex items-center space-x-2">
@@ -186,7 +179,6 @@ def get_dashboard_html() -> str:
             </div>
         </div>
 
-        <!-- TAB 2: ACTIVITÄTS-LOG ("Wer schaut was") -->
         <div id="tab-content-activity" class="space-y-6 hidden">
             <div class="bg-cardbg border border-cardborder p-5 rounded-2xl shadow space-y-4">
                 <div class="flex flex-wrap items-center justify-between gap-4">
@@ -198,7 +190,6 @@ def get_dashboard_html() -> str:
                         <p class="text-xs text-slate-400">Wer schaut gerade was, wann und mit welchem Fortschritt</p>
                     </div>
 
-                    <!-- Filters -->
                     <div class="flex flex-wrap items-center gap-3">
                         <select id="log-filter-source" onchange="loadActivityLogs()" class="bg-slate-900 border border-cardborder text-slate-200 text-xs rounded-xl px-3 py-2 outline-none">
                             <option value="all">Alle Quellen</option>
@@ -214,7 +205,6 @@ def get_dashboard_html() -> str:
                     </div>
                 </div>
 
-                <!-- Activity Log Table -->
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-sm text-slate-300">
                         <thead class="bg-slate-900/60 text-slate-400 uppercase text-xs">
@@ -233,7 +223,6 @@ def get_dashboard_html() -> str:
                     </table>
                 </div>
 
-                <!-- Pagination -->
                 <div class="flex items-center justify-between text-xs text-slate-400 pt-2" id="log-pagination">
                     <span id="log-page-info">Seite 1</span>
                     <div class="space-x-2">
@@ -244,7 +233,6 @@ def get_dashboard_html() -> str:
             </div>
         </div>
 
-        <!-- TAB 3: BENUTZER & PROFILE -->
         <div id="tab-content-users" class="space-y-6 hidden">
             <div class="bg-cardbg border border-cardborder p-5 rounded-2xl shadow space-y-4">
                 <div class="flex items-center justify-between">
@@ -282,7 +270,6 @@ def get_dashboard_html() -> str:
             </div>
         </div>
 
-        <!-- TAB 4: DATENBANK EXPLORER (phpMyAdmin style) -->
         <div id="tab-content-database" class="space-y-6 hidden">
             <div class="bg-cardbg border border-cardborder p-5 rounded-2xl shadow space-y-4">
                 <div class="flex flex-wrap items-center justify-between gap-4">
@@ -305,9 +292,7 @@ def get_dashboard_html() -> str:
                     </div>
                 </div>
 
-                <!-- DB Layout Grid -->
                 <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                    <!-- Left Sidebar: Tables List -->
                     <div class="bg-slate-900/80 border border-cardborder p-4 rounded-xl space-y-3">
                         <h3 class="text-xs font-semibold uppercase text-slate-400 tracking-wider">Tabellen</h3>
                         <div id="db-tables-list" class="space-y-1">
@@ -315,9 +300,7 @@ def get_dashboard_html() -> str:
                         </div>
                     </div>
 
-                    <!-- Right Main Area: Table Data & Query Console -->
                     <div class="lg:col-span-3 space-y-4">
-                        <!-- Mode Tabs -->
                         <div class="flex space-x-2 border-b border-cardborder pb-2">
                             <button onclick="setDbSubTab('data')" id="dbtab-data" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-800 text-white">
                                 Data Browser
@@ -327,7 +310,6 @@ def get_dashboard_html() -> str:
                             </button>
                         </div>
 
-                        <!-- Sub-tab 1: Data Browser -->
                         <div id="dbsub-data" class="space-y-3">
                             <div class="flex items-center justify-between gap-3">
                                 <span class="text-xs font-semibold text-amber-400" id="current-table-title">Tabelle wählen...</span>
@@ -354,7 +336,6 @@ def get_dashboard_html() -> str:
                             </div>
                         </div>
 
-                        <!-- Sub-tab 2: SQL Console -->
                         <div id="dbsub-query" class="space-y-3 hidden">
                             <textarea id="sql-query-input" rows="4" class="w-full bg-slate-950 border border-cardborder text-emerald-400 font-mono text-xs p-3 rounded-xl outline-none focus:border-amber-500" placeholder="SELECT * FROM content_index LIMIT 20;"></textarea>
                             <button onclick="runSqlQuery()" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs px-4 py-2 rounded-xl flex items-center space-x-2">
@@ -370,7 +351,6 @@ def get_dashboard_html() -> str:
             </div>
         </div>
 
-        <!-- TAB 5: SCRAPER & SYSTEM -->
         <div id="tab-content-scraper" class="space-y-6 hidden">
             <div class="bg-cardbg border border-cardborder p-5 rounded-2xl shadow space-y-4">
                 <h2 class="text-lg font-bold text-white flex items-center space-x-2">
@@ -411,7 +391,6 @@ def get_dashboard_html() -> str:
                     </button>
                 </div>
 
-                <!-- Live Terminal Box -->
                 <div class="space-y-3 pt-2">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center space-x-2">
@@ -440,7 +419,6 @@ def get_dashboard_html() -> str:
             </div>
         </div>
 
-        <!-- TAB 6: GESPERRTE GERÄTE & IP-SPERREN -->
         <div id="tab-content-banned" class="space-y-6 hidden">
             <div class="bg-cardbg border border-cardborder p-5 rounded-2xl shadow space-y-4">
                 <div class="flex flex-wrap items-center justify-between gap-4">
@@ -483,10 +461,8 @@ def get_dashboard_html() -> str:
 
     </main>
 
-    <!-- User Details Modal (Genaue Nutzerdetails with Charts & Stats) -->
     <div id="user-details-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden flex items-center justify-center p-4 z-50 overflow-y-auto">
         <div class="bg-cardbg border border-cardborder p-6 rounded-2xl max-w-5xl w-full my-8 space-y-6 shadow-2xl relative max-h-[90vh] flex flex-col">
-            <!-- Modal Header -->
             <div class="flex items-center justify-between border-b border-cardborder pb-4 shrink-0">
                 <div class="flex items-center space-x-3">
                     <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-accentblue to-indigo-600 flex items-center justify-center font-bold text-2xl text-white shadow-lg" id="ud-avatar">
@@ -505,9 +481,7 @@ def get_dashboard_html() -> str:
                 </button>
             </div>
 
-            <!-- Scrollable Body Container -->
             <div class="overflow-y-auto space-y-6 flex-1 pr-1">
-                <!-- Quick KPI Stats Cards -->
                 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                     <div class="bg-slate-900/80 border border-cardborder p-3 rounded-xl">
                         <p class="text-[10px] uppercase font-semibold text-slate-400">Gesamt-Wiedergabe</p>
@@ -535,9 +509,7 @@ def get_dashboard_html() -> str:
                     </div>
                 </div>
 
-                <!-- Charts Row -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <!-- Daily Activity Chart -->
                     <div class="lg:col-span-2 bg-slate-900/60 border border-cardborder p-4 rounded-xl space-y-2">
                         <h4 class="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
                             <i data-lucide="line-chart" class="w-4 h-4 text-accentblue"></i>
@@ -548,7 +520,6 @@ def get_dashboard_html() -> str:
                         </div>
                     </div>
 
-                    <!-- Source Breakdown Doughnut -->
                     <div class="bg-slate-900/60 border border-cardborder p-4 rounded-xl space-y-2 flex flex-col justify-between">
                         <h4 class="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
                             <i data-lucide="pie-chart" class="w-4 h-4 text-amber-400"></i>
@@ -560,7 +531,6 @@ def get_dashboard_html() -> str:
                     </div>
                 </div>
 
-                <!-- Detail Tabs -->
                 <div class="space-y-4">
                     <div class="flex space-x-2 border-b border-cardborder pb-2">
                         <button onclick="setUserDetailTab('history')" id="udtab-btn-history" class="text-xs font-bold px-3.5 py-2 rounded-xl bg-accentred text-white shadow">
@@ -574,7 +544,6 @@ def get_dashboard_html() -> str:
                         </button>
                     </div>
 
-                    <!-- Sub-tab 1: Wiedergabeverlauf -->
                     <div id="udtab-content-history" class="space-y-3">
                         <div class="overflow-x-auto border border-cardborder rounded-xl">
                             <table class="w-full text-left text-xs text-slate-300">
@@ -595,14 +564,12 @@ def get_dashboard_html() -> str:
                         </div>
                     </div>
 
-                    <!-- Sub-tab 2: Merkliste -->
                     <div id="udtab-content-watchlist" class="space-y-3 hidden">
                         <div id="ud-watchlist-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                             <div class="text-xs text-slate-500 col-span-full p-4 text-center">Lade Merkliste...</div>
                         </div>
                     </div>
 
-                    <!-- Sub-tab 3: Suchverlauf -->
                     <div id="udtab-content-searches" class="space-y-3 hidden">
                         <div class="overflow-x-auto border border-cardborder rounded-xl">
                             <table class="w-full text-left text-xs text-slate-300">
@@ -626,7 +593,26 @@ def get_dashboard_html() -> str:
         </div>
     </div>
 
-    <!-- Create User Modal -->
+    <div id="admin-login-modal" class="fixed inset-0 bg-slate-950/95 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[60]">
+        <form onsubmit="submitAdminLogin(event)" class="bg-cardbg border border-cardborder p-6 rounded-2xl max-w-sm w-full space-y-4 shadow-2xl">
+            <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+                <i data-lucide="lock" class="w-5 h-5 text-accentred"></i>
+                <span>Admin-Anmeldung</span>
+            </h3>
+
+            <div class="text-xs">
+                <label for="admin-password" class="block text-slate-400 mb-1 font-medium">Admin-Passwort</label>
+                <input type="password" id="admin-password" autocomplete="current-password" class="w-full bg-slate-900 border border-cardborder text-white p-2.5 rounded-xl outline-none focus:border-accentred">
+            </div>
+
+            <p id="admin-login-error" class="text-xs text-rose-400 hidden"></p>
+
+            <div class="flex justify-end pt-2">
+                <button type="submit" class="px-4 py-2 bg-accentred hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow">Anmelden</button>
+            </div>
+        </form>
+    </div>
+
     <div id="create-user-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
         <div class="bg-cardbg border border-cardborder p-6 rounded-2xl max-w-md w-full space-y-4 shadow-2xl">
             <h3 class="text-lg font-bold text-white flex items-center space-x-2">
@@ -652,7 +638,6 @@ def get_dashboard_html() -> str:
         </div>
     </div>
 
-    <!-- Edit User Modal -->
     <div id="edit-user-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
         <div class="bg-cardbg border border-cardborder p-6 rounded-2xl max-w-md w-full space-y-4 shadow-2xl">
             <h3 class="text-lg font-bold text-white flex items-center space-x-2">
@@ -684,7 +669,6 @@ def get_dashboard_html() -> str:
         </div>
     </div>
 
-    <!-- Manual Ban Modal -->
     <div id="manual-ban-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
         <div class="bg-cardbg border border-cardborder p-6 rounded-2xl max-w-md w-full space-y-4 shadow-2xl">
             <h3 class="text-lg font-bold text-white flex items-center space-x-2">
@@ -718,8 +702,76 @@ def get_dashboard_html() -> str:
         </div>
     </div>
 
-    <!-- Scripts -->
     <script>
+        const ADMIN_TOKEN_KEY = 'bljadflix_admin_token';
+        const nativeFetch = window.fetch.bind(window);
+
+        function getAdminToken() {
+            try {
+                return sessionStorage.getItem(ADMIN_TOKEN_KEY);
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function setAdminToken(token) {
+            try {
+                if (token) {
+                    sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+                } else {
+                    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+                }
+            } catch (e) {}
+        }
+
+        window.fetch = async (url, options = {}) => {
+            const headers = new Headers(options.headers || {});
+            const token = getAdminToken();
+            if (token) headers.set('X-Admin-Token', token);
+            const res = await nativeFetch(url, { ...options, headers });
+            if (res.status === 401 || res.status === 503) {
+                setAdminToken(null);
+                showAdminLogin(res.status === 503 ? 'Admin-Zugang deaktiviert: admin_password in config.json setzen.' : '');
+            }
+            return res;
+        };
+
+        function showAdminLogin(message) {
+            const error = document.getElementById('admin-login-error');
+            error.textContent = message || '';
+            error.classList.toggle('hidden', !message);
+            document.getElementById('admin-login-modal').classList.remove('hidden');
+            document.getElementById('admin-password').focus();
+        }
+
+        async function submitAdminLogin(event) {
+            event.preventDefault();
+            const input = document.getElementById('admin-password');
+            const res = await nativeFetch('/admin/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: input.value })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                showAdminLogin(data.detail || 'Anmeldung fehlgeschlagen');
+                return;
+            }
+            setAdminToken(data.token);
+            input.value = '';
+            document.getElementById('admin-login-modal').classList.add('hidden');
+            switchTab(currentTab);
+        }
+
+        async function adminLogout() {
+            await nativeFetch('/admin/api/logout', {
+                method: 'POST',
+                headers: { 'X-Admin-Token': getAdminToken() || '' }
+            });
+            setAdminToken(null);
+            showAdminLogin('');
+        }
+
         let currentTab = 'dashboard';
         let timelineChart = null;
         let sourceChart = null;
@@ -762,7 +814,6 @@ def get_dashboard_html() -> str:
             };
         }
 
-        // --- TAB 1: DASHBOARD ---
         async function loadDashboardData() {
             try {
                 const [statsRes, topRes, chartsRes] = await Promise.all([
@@ -771,7 +822,6 @@ def get_dashboard_html() -> str:
                     fetch('/admin/api/charts-data').then(r => r.json())
                 ]);
 
-                // Update Cards
                 document.getElementById('stat-users-count').innerText = `${statsRes.total_users} (Aktiv: ${statsRes.active_users})`;
                 document.getElementById('stat-active-sessions').innerText = `${statsRes.active_sessions} Aktive Gerätesitzungen`;
 
@@ -787,7 +837,6 @@ def get_dashboard_html() -> str:
                 const rate = totalEps > 0 ? Math.round((statsRes.completed_episodes / totalEps) * 100) : 0;
                 document.getElementById('stat-completion-rate').innerText = `${rate}% Fertigstellungsquote`;
 
-                // Render Top Content Table
                 const topBody = document.getElementById('top-content-tbody');
                 if (topRes.length === 0) {
                     topBody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-500">Noch keine Wiedergabe-Daten vorhanden.</td></tr>';
@@ -807,7 +856,6 @@ def get_dashboard_html() -> str:
                     `).join('');
                 }
 
-                // Render Timeline Chart
                 renderTimelineChart(chartsRes.daily_activity);
                 renderSourceChart(chartsRes.source_breakdown);
 
@@ -869,7 +917,6 @@ def get_dashboard_html() -> str:
             });
         }
 
-        // --- TAB 2: ACTIVITY LOGS ---
         async function loadActivityLogs() {
             const src = document.getElementById('log-filter-source').value;
             const search = document.getElementById('log-filter-search').value;
@@ -935,7 +982,6 @@ def get_dashboard_html() -> str:
             loadActivityLogs();
         }
 
-        // --- TAB 3: USERS ---
         async function loadUsers() {
             try {
                 const users = await fetch('/admin/api/users').then(r => r.json());
@@ -980,7 +1026,6 @@ def get_dashboard_html() -> str:
             }
         }
 
-        // --- USER DETAILS MODAL JS ---
         let currentDetailUserId = null;
         let userTimelineChart = null;
         let userSourceChart = null;
@@ -1007,7 +1052,6 @@ def get_dashboard_html() -> str:
                 const createdStr = u.created_at ? new Date(u.created_at * 1000).toLocaleDateString('de-DE') : '-';
                 document.getElementById('ud-user-subtitle').innerText = `PIN: ${u.login_code || u.password || '-'} | ID: #${u.id} | Registriert: ${createdStr}`;
 
-                // KPI Stats
                 document.getElementById('ud-stat-watchtime').innerText = s.total_watch_minutes_str;
                 document.getElementById('ud-stat-completed').innerText = `${s.completed_episodes} / ${s.total_records}`;
                 document.getElementById('ud-stat-rate').innerText = `${s.completion_rate}%`;
@@ -1015,11 +1059,9 @@ def get_dashboard_html() -> str:
                 document.getElementById('ud-stat-searches').innerText = s.search_count;
                 document.getElementById('ud-stat-source').innerText = s.favorite_source;
 
-                // Render User Charts
                 renderUserTimelineChart(s.daily_activity);
                 renderUserSourceChart(s.sources_breakdown);
 
-                // Load Subtab contents
                 loadUserWatchHistory();
                 loadUserWatchlist();
                 loadUserSearchHistory();
@@ -1314,7 +1356,6 @@ def get_dashboard_html() -> str:
             }
         }
 
-        // --- TAB 4: DATABASE EXPLORER ---
         async function loadDatabaseTables() {
             currentDb = document.getElementById('db-selector').value;
             try {
@@ -1345,7 +1386,7 @@ def get_dashboard_html() -> str:
             currentTable = tableName;
             dbPage = 1;
             document.getElementById('current-table-title').innerText = `Tabelle: ${tableName}`;
-            loadDatabaseTables(); // refresh active highlight
+            loadDatabaseTables();
             loadTableData();
         }
 
@@ -1365,11 +1406,9 @@ def get_dashboard_html() -> str:
             try {
                 const res = await fetch(`/admin/api/db/data?db_name=${currentDb}&table_name=${currentTable}&page=${dbPage}&limit=30&search=${search}`).then(r => r.json());
 
-                // Thead
                 const thead = document.getElementById('db-table-thead');
                 thead.innerHTML = `<tr>${res.columns.map(c => `<th class="p-3 border-b border-cardborder">${c}</th>`).join('')}</tr>`;
 
-                // Tbody
                 const tbody = document.getElementById('db-table-tbody');
                 if (!res.rows || res.rows.length === 0) {
                     tbody.innerHTML = `<tr><td colspan="${res.columns.length || 1}" class="p-4 text-center text-slate-500">Keine Datensätze in dieser Tabelle.</td></tr>`;
@@ -1426,7 +1465,6 @@ def get_dashboard_html() -> str:
             }
         }
 
-        // --- TAB 5: SCRAPER & TERMINAL LOGS ---
         let lastLogId = 0;
         let logPollInterval = null;
 
@@ -1535,7 +1573,6 @@ def get_dashboard_html() -> str:
             }
         }
 
-        // --- TAB 6: GESPERRTE GERÄTE ---
         function openManualBanModal() {
             document.getElementById('ban-ip-address').value = '';
             document.getElementById('ban-device-id').value = '';
@@ -1654,9 +1691,12 @@ def get_dashboard_html() -> str:
             }
         }
 
-        // Init page
         document.addEventListener('DOMContentLoaded', () => {
-            switchTab('dashboard');
+            if (getAdminToken()) {
+                switchTab('dashboard');
+            } else {
+                showAdminLogin('');
+            }
         });
     </script>
 </body>

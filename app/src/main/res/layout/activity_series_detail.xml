@@ -9,7 +9,6 @@
     android:clipChildren="false"
     android:clipToPadding="false">
 
-    <!-- LINKE SEITE: Cover Poster Container -->
     <FrameLayout
         android:layout_width="300dp"
         android:layout_height="450dp"
@@ -27,7 +26,6 @@
             android:contentDescription="Serien Cover" />
     </FrameLayout>
 
-    <!-- RECHTE SEITE: Details & Episoden -->
     <androidx.core.widget.NestedScrollView
         android:layout_width="0dp"
         android:layout_height="match_parent"
@@ -108,7 +106,6 @@
                 android:textStyle="bold"
                 android:layout_marginTop="32dp" />
 
-            <!-- Spinner für Staffel-Auswahl -->
             <Spinner
                 android:id="@+id/spinner_seasons"
                 android:layout_width="wrap_content"
@@ -118,7 +115,6 @@
                 android:popupBackground="#161622"
                 android:minHeight="48dp" />
 
-            <!-- Vertikale Liste für Episoden -->
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/rv_episodes"
                 android:layout_width="match_parent"

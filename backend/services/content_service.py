@@ -93,7 +93,6 @@ class ContentService:
 
     def get_episodes(self, source: Optional[str] = "aniworld", content_id: int = 0, user_id: int = 1) -> Dict[int, List[Dict]]:
         clean_source = self.db.sanitize_source(source)
-        # Fetch user watch progress from user_db
         user_progress = {}
         with self.db.get_user_connection(row_factory=True) as u_conn:
             u_cursor = u_conn.cursor()
@@ -105,7 +104,6 @@ class ContentService:
             for row in u_cursor.fetchall():
                 user_progress[row["episode_id"]] = dict(row)
 
-        # Fetch episodes from content_db
         with self.db.get_content_connection(clean_source, row_factory=True) as c_conn:
             c_cursor = c_conn.cursor()
             c_cursor.execute('''
@@ -139,7 +137,6 @@ class ContentService:
                     last_watched_at = excluded.last_watched_at
             ''', (user_id, clean_source, req.episode_id, req.content_id, req.progress_seconds, req.duration_seconds, req.is_completed, current_time))
 
-            # Record watch_logs entry (update if recent within last 30s or insert new log)
             cursor.execute('''
                 SELECT id, timestamp FROM watch_logs
                 WHERE user_id = ? AND source = ? AND episode_id = ?
@@ -183,7 +180,6 @@ class ContentService:
                 for s_row in series_rows:
                     c_id = s_row["content_id"]
 
-                    # Fetch series metadata from content db
                     with self.db.get_content_connection(src, row_factory=True) as c_conn:
                         c_cursor = c_conn.cursor()
                         c_cursor.execute("SELECT * FROM content_index WHERE id = ?", (c_id,))
@@ -191,14 +187,12 @@ class ContentService:
                         if not content_info:
                             continue
 
-                        # Fetch episodes from content db
                         c_cursor.execute("SELECT * FROM episodes WHERE content_id = ? ORDER BY season_number, episode_number", (c_id,))
                         episodes = [dict(r) for r in c_cursor.fetchall()]
 
                     if not episodes:
                         continue
 
-                    # Fetch progress records for these episodes
                     u_cursor.execute('''
                         SELECT episode_id, is_completed, progress_seconds, duration_seconds, last_watched_at
                         FROM watch_progress
@@ -206,7 +200,6 @@ class ContentService:
                     ''', (user_id, src, c_id))
                     progress_map = {r["episode_id"]: dict(r) for r in u_cursor.fetchall()}
 
-                    # Combine episode details with user watch progress
                     for ep in episodes:
                         prog = progress_map.get(ep["id"], {})
                         ep["is_completed"] = bool(prog.get("is_completed", False))

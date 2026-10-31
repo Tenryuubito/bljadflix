@@ -4,6 +4,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
+import android.webkit.WebStorage
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -17,12 +18,15 @@ import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.bumptech.glide.Glide
 import com.shadow.firetv.R
 import com.shadow.firetv.core.source.StreamingSource
 import com.shadow.firetv.core.theme.AppTheme
 import com.shadow.firetv.core.theme.ThemeManager
 import com.shadow.firetv.feature.auth.LoginActivity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -151,11 +155,23 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         btnClearCache.setOnClickListener {
-            viewModel.clearCache()
+            clearAppCache()
         }
 
         btnLogout.setOnClickListener {
             viewModel.logout()
+        }
+    }
+
+    private fun clearAppCache() {
+        lifecycleScope.launch {
+            Glide.get(this@SettingsActivity).clearMemory()
+            WebStorage.getInstance().deleteAllData()
+            withContext(Dispatchers.IO) {
+                Glide.get(this@SettingsActivity).clearDiskCache()
+                cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+            }
+            viewModel.clearCache()
         }
     }
 

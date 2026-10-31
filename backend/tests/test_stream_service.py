@@ -27,14 +27,12 @@ class TestStreamService(unittest.TestCase):
         }
         self.stream_service = StreamService(self.db, self.config_mock)
 
-        # Seed test episode in AniWorld content DB
         with self.db.get_content_connection("aniworld") as conn:
             cursor = conn.cursor()
             cursor.execute("INSERT INTO content_index (id, title, source_page_url) VALUES (1, 'Test Show', 'https://aniworld.to/anime/stream/test-show')")
             cursor.execute("INSERT INTO episodes (id, content_id, season_number, episode_number, title, episode_url) VALUES (10, 1, 1, 1, 'Ep 1', 'https://aniworld.to/anime/stream/test-show/staffel-1/episode-1')")
             conn.commit()
 
-        # Seed test episode in Filmo content DB
         with self.db.get_content_connection("filmo") as conn:
             cursor = conn.cursor()
             cursor.execute("INSERT INTO content_index (id, title, source_page_url) VALUES (1, 'Test Film', 'https://filmo.to/movies/test-film')")

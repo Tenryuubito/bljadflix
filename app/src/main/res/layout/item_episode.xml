@@ -10,7 +10,6 @@
     android:background="@drawable/item_focus_selector"
     android:layout_marginBottom="8dp">
 
-    <!-- Episoden-Nummer Badge -->
     <TextView
         android:id="@+id/tv_ep_number"
         android:layout_width="wrap_content"
@@ -24,7 +23,6 @@
         android:paddingVertical="6dp"
         android:layout_marginEnd="16dp" />
 
-    <!-- Episode Title & Progress -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_weight="1"

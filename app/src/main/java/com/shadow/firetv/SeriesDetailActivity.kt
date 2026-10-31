@@ -56,6 +56,7 @@ class SeriesDetailActivity : AppCompatActivity() {
         val description = intent.getStringExtra("DESCRIPTION") ?: ""
         val genre = intent.getStringExtra("GENRE")
         val coverUrl = intent.getStringExtra("COVER_URL")
+        val source = intent.getStringExtra("SOURCE")
 
         findViewById<TextView>(R.id.tv_title).text = title
         findViewById<TextView>(R.id.tv_description).text = description
@@ -85,7 +86,7 @@ class SeriesDetailActivity : AppCompatActivity() {
             viewModel.toggleWatchlist()
         }
 
-        viewModel.initData(contentId, title, description, genre, coverUrl)
+        viewModel.initData(contentId, title, description, genre, coverUrl, source)
         observeViewModel()
     }
 
@@ -114,7 +115,6 @@ class SeriesDetailActivity : AppCompatActivity() {
     private fun renderState(state: SeriesDetailUiState) {
         progressBar.visibility = if (state.isLoading) View.VISIBLE else View.GONE
 
-        // Update Watchlist Button
         if (state.isWatchlisted) {
             btnWatchlist.text = getString(R.string.btn_watchlist_added)
             btnWatchlist.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#E50914"))
@@ -125,7 +125,6 @@ class SeriesDetailActivity : AppCompatActivity() {
             btnWatchlist.setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_star_outline, 0, 0, 0)
         }
 
-        // Update Continue Watching / Start Series Button
         val continueEp = state.continueEpisode
         if (continueEp != null) {
             btnContinueWatching.visibility = View.VISIBLE
@@ -155,10 +154,8 @@ class SeriesDetailActivity : AppCompatActivity() {
             btnContinueWatching.visibility = View.GONE
         }
 
-        // Update Episodes List
         epAdapter.updateEpisodes(state.currentEpisodes)
 
-        // Update Seasons Spinner
         if (state.seasonsList.isNotEmpty()) {
             val spinnerItems = state.seasonsList.map { season ->
                 val eps = state.seasonsData[season] ?: emptyList()
@@ -194,6 +191,7 @@ class SeriesDetailActivity : AppCompatActivity() {
         val intent = Intent(this, PlayerActivity::class.java).apply {
             putExtra("EPISODE_ID", episodeId)
             putExtra("CONTENT_ID", contentId)
+            putExtra("SOURCE", viewModel.uiState.value.source)
         }
         startActivity(intent)
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)

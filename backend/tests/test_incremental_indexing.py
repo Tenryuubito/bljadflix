@@ -13,7 +13,6 @@ from config import Config
 from services.indexers.aniworld_indexer import AniWorldIndexer
 from services.indexers.filmo_indexer import FilmoIndexer
 from services.indexers.sto_indexer import StoIndexer
-from services.indexer_service import IndexerService
 
 class TestIncrementalIndexing(unittest.TestCase):
 
@@ -48,14 +47,11 @@ class TestIncrementalIndexing(unittest.TestCase):
 
         indexer = AniWorldIndexer(self.db, self.config_mock)
 
-        # Pre-seed "attack-on-titan" in DB
         s_url = "https://aniworld.to/anime/stream/attack-on-titan"
         indexer.save_series_to_db("Attack on Titan", "Desc", "cover.jpg", s_url, "Action", [(1, 1, "Ep 1", s_url + "/episode-1")])
 
-        # Run scrape_all_series with incremental=True
         indexer.scrape_all_series(incremental=True)
 
-        # Only demon-slayer should be processed
         mock_process.assert_called_once_with("https://aniworld.to/anime/stream/demon-slayer")
 
     @patch.object(AniWorldIndexer, 'process_single_series')
@@ -74,14 +70,11 @@ class TestIncrementalIndexing(unittest.TestCase):
 
         indexer = AniWorldIndexer(self.db, self.config_mock)
 
-        # Pre-seed "attack-on-titan" in DB
         s_url = "https://aniworld.to/anime/stream/attack-on-titan"
         indexer.save_series_to_db("Attack on Titan", "Desc", "cover.jpg", s_url, "Action", [(1, 1, "Ep 1", s_url + "/episode-1")])
 
-        # Run scrape_all_series with incremental=False
         indexer.scrape_all_series(incremental=False)
 
-        # Both series should be processed
         self.assertEqual(mock_process.call_count, 2)
 
     @patch.object(StoIndexer, 'process_single_series')
@@ -100,11 +93,9 @@ class TestIncrementalIndexing(unittest.TestCase):
 
         indexer = StoIndexer(self.db, self.config_mock)
 
-        # Pre-seed "breaking-bad" in DB
         s_url = "http://186.2.175.5/serie/stream/breaking-bad"
         indexer.save_series_to_db("Breaking Bad", "Desc", "cover.jpg", s_url, "Drama", [(1, 1, "Ep 1", s_url + "/episode-1")])
 
-        # Run scrape_all_series with incremental=True
         indexer.scrape_all_series(incremental=True)
 
         mock_process.assert_called_once_with("http://186.2.175.5/serie/stream/better-call-saul")
@@ -125,11 +116,9 @@ class TestIncrementalIndexing(unittest.TestCase):
 
         indexer = FilmoIndexer(self.db, self.config_mock)
 
-        # Pre-seed "inception" in DB
         s_url = "https://filmo.to/movies/inception"
         indexer.save_series_to_db("Inception", "Desc", "cover.jpg", s_url, "Sci-Fi", [(1, 1, "Inception", s_url)])
 
-        # Run scrape_all_series with limit=10, incremental=True
         indexer.scrape_all_series(limit=10, incremental=True)
 
         mock_process.assert_called_once_with("https://filmo.to/movies/interstellar")

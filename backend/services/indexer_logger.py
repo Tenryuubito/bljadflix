@@ -1,6 +1,6 @@
 import time
 import threading
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 class IndexerLogger:
     _instance = None
@@ -34,7 +34,6 @@ class IndexerLogger:
             if len(self.logs) > self.max_entries:
                 self.logs.pop(0)
 
-            # Print to standard console
             try:
                 print(f"[{entry['timestamp']}] [{entry['source']}] [{entry['level']}] {message}")
             except Exception:
@@ -43,7 +42,6 @@ class IndexerLogger:
     def get_logs(self, since_id: int = 0) -> List[Dict[str, Any]]:
         with self.lock:
             if since_id == 0:
-                # Limit initial dump to last 300 entries for performance
                 return list(self.logs[-300:])
             return [l for l in self.logs if l["id"] > since_id]
 

@@ -3,11 +3,9 @@ package com.shadow.firetv
 import com.shadow.firetv.core.data.MovieRepositoryImpl
 import com.shadow.firetv.core.model.ContinueWatchingItem
 import com.shadow.firetv.core.model.Movie
-import com.shadow.firetv.core.model.ProgressRequest
 import com.shadow.firetv.core.model.StreamResponse
 import com.shadow.firetv.core.model.TriggerIndexResponse
 import com.shadow.firetv.core.model.WatchlistRequest
-import com.shadow.firetv.core.model.WatchlistStatus
 import com.shadow.firetv.core.network.MovieApi
 import com.shadow.firetv.core.source.SourceManager
 import io.mockk.coEvery
@@ -84,12 +82,13 @@ class MovieRepositoryTest {
     @Test
     fun `updateWatchlist sends request to api`() = runTest {
         val req = WatchlistRequest(content_id = 5, is_watchlisted = true)
-        coEvery { api.updateWatchlist(req) } returns Unit
+        val sent = req.copy(source = "aniworld")
+        coEvery { api.updateWatchlist(sent) } returns Unit
 
         val result = repository.updateWatchlist(req)
 
         assertTrue(result.isSuccess)
-        coVerify { api.updateWatchlist(req) }
+        coVerify { api.updateWatchlist(sent) }
     }
 
     @Test

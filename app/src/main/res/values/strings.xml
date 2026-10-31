@@ -2,48 +2,17 @@
 <resources>
     <string name="app_name">Bljadflix</string>
 
-    <!-- Sidebar / Nav -->
-    <string name="sidebar_continue_watching">📺 Weiterschauen</string>
-    <string name="sidebar_watchlist">⭐ Meine Watchlist</string>
-    <string name="sidebar_all_series">🎬 Alle Serien</string>
     <string name="sidebar_settings">⚙️ Einstellungen</string>
-    <string name="search_hint">Suchen...</string>
 
-    <!-- Empty & Loading States -->
-    <string name="empty_content">Keine Inhalte gefunden.</string>
-    <string name="empty_episodes">Keine Episoden vorhanden</string>
-    <string name="no_items_present">Keine Inhalte vorhanden</string>
-    <string name="error_loading">Fehler beim Laden</string>
-    <string name="error_episodes_loading">Fehler beim Laden der Episoden</string>
-    <string name="error_stream_loading">Stream konnte nicht geladen werden</string>
-
-    <!-- Splash Screen -->
-    <string name="init_start">Starte Anwendung...</string>
-    <string name="init_check_auth">Prüfe Authentifizierung...</string>
-    <string name="init_load_categories">Lade Kategorien von Backend (%1$s)...</string>
-    <string name="init_sync_user">Synchronisiere Benutzerinhalte vom Server...</string>
-    <string name="init_load_initial">Lade Startinhalte...</string>
-    <string name="init_complete">Initialisierung abgeschlossen</string>
-
-    <!-- Notifications & Toasts -->
-    <string name="source_switched">Quelle gewechselt: %1$s</string>
-    <string name="watchlist_updated">Watchlist aktualisiert</string>
-    <string name="session_expired">Sitzung abgelaufen oder auf einem anderen Gerät angemeldet</string>
-    <string name="session_invalid">Sitzung ungültig</string>
-    <string name="starting_next_episode">Starte nächste Folge...</string>
-
-    <!-- Series Detail Screen -->
     <string name="btn_watchlist_add">Zur Watchlist hinzufügen</string>
     <string name="btn_watchlist_added">Auf der Watchlist</string>
     <string name="btn_watch_start">Serie starten: S%1$sE%2$s</string>
     <string name="btn_watch_continue">Weiter schauen: S%1$sE%2$s</string>
     <string name="btn_watch_restart">Von vorne schauen: S%1$sE%2$s</string>
-    <string name="select_season">Staffel auswählen:</string>
     <string name="season_label">Staffel %1$s</string>
     <string name="season_label_completed">Staffel %1$s ✅</string>
     <string name="episodes_episode_info">Staffel %1$s, Folge %2$s%3$s</string>
 
-    <!-- Settings Screen -->
     <string name="title_settings">Einstellungen</string>
     <string name="btn_trigger_indexer">Katalog / Indexer manuell starten</string>
     <string name="btn_sync_data">Inhalte jetzt synchronisieren</string>
@@ -51,7 +20,6 @@
     <string name="btn_logout">Abmelden</string>
     <string name="settings_logo_desc">Einstellungen Logo</string>
 
-    <!-- Player Seek Overlay -->
     <string name="seek_forward_10">+10s</string>
     <string name="seek_rewind_10">-10s</string>
 </resources>

@@ -11,16 +11,34 @@ android {
         applicationId = "com.shadow.firetv.installer"
         minSdk = 28
         targetSdk = 30
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
+        versionName = (project.findProperty("versionName") as String?) ?: "1.0.0"
 
         vectorDrawables {
             useSupportLibrary = true
+        }
+
+        val backendUrl = (project.findProperty("backendUrl") as String?) ?: "http://192.168.2.103:8000/"
+        buildConfigField("String", "BACKEND_URL", "\"$backendUrl\"")
+    }
+
+    signingConfigs {
+        create("release") {
+            val keystorePath = System.getenv("SIGNING_KEYSTORE_PATH")
+            if (keystorePath != null) {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("SIGNING_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            }
         }
     }
 
     buildTypes {
         release {
+            if (System.getenv("SIGNING_KEYSTORE_PATH") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
@@ -42,7 +60,6 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
-    implementation("androidx.leanback:leanback:1.0.0")
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("androidx.fragment:fragment-ktx:1.6.2")

@@ -1,6 +1,6 @@
 import time
-import sqlite3
 from typing import List, Dict, Optional, Any
+from fastapi import HTTPException
 from database import DatabaseManager
 
 class AdminService:
@@ -26,7 +26,6 @@ class AdminService:
             "content_counts": {}
         }
 
-        # User & Session Stats
         with self.db.get_user_connection(row_factory=True) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*), SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) FROM users")
@@ -56,7 +55,6 @@ class AdminService:
                 stats["completed_episodes"] = w_row["completed"] or 0
                 stats["in_progress_episodes"] = w_row["in_progress"] or 0
 
-        # Content Counts per source
         for src in ["aniworld", "sto", "filmo"]:
             try:
                 with self.db.get_content_connection(src) as c_conn:
@@ -119,7 +117,6 @@ class AdminService:
         return top_items
 
     def get_activity_charts_data(self) -> Dict[str, Any]:
-        # Sources breakdown
         source_breakdown = {}
         with self.db.get_user_connection(row_factory=True) as conn:
             cursor = conn.cursor()
@@ -134,7 +131,6 @@ class AdminService:
                     "hours": round((row["total_sec"] or 0) / 3600.0, 1)
                 }
 
-            # Daily activity (last 7 days from watch_logs if present, else watch_progress)
             current_time = time.time()
             seven_days_ago = current_time - (7 * 86400)
             
@@ -150,7 +146,6 @@ class AdminService:
             daily_rows = cursor.fetchall()
 
             if not daily_rows:
-                # Fallback to watch_progress last_watched_at
                 cursor.execute('''
                     SELECT strftime('%Y-%m-%d', datetime(last_watched_at, 'unixepoch', 'localtime')) as watch_date,
                            COUNT(*) as event_count,
@@ -190,7 +185,6 @@ class AdminService:
         with self.db.get_user_connection(row_factory=True) as conn:
             cursor = conn.cursor()
 
-            # Check if watch_logs has records
             cursor.execute("SELECT COUNT(*) FROM watch_logs")
             logs_cnt = cursor.fetchone()[0]
 
@@ -223,7 +217,6 @@ class AdminService:
             cursor.execute(query_sql, tuple(params))
             raw_rows = cursor.fetchall()
 
-            # Cache content details
             content_cache = {}
 
             for r in raw_rows:
@@ -269,7 +262,6 @@ class AdminService:
                 r_dict.update(meta)
                 r_dict["timestamp"] = r_dict.get("timestamp") or r_dict.get("last_watched_at") or 0.0
 
-                # Filter by search if provided
                 if search and search.strip():
                     term = search.lower().strip()
                     m_user = (r_dict.get("username") or "").lower()
@@ -336,7 +328,6 @@ class AdminService:
             if s_row:
                 session_info = dict(s_row)
 
-            # 1. Watch Progress Metrics
             cursor.execute('''
                 SELECT
                     COUNT(*) as total_records,
@@ -352,15 +343,12 @@ class AdminService:
             completed_cnt = wp_row["completed"] or 0
             in_progress_cnt = wp_row["in_progress"] or 0
 
-            # 2. Watchlist Count
             cursor.execute("SELECT COUNT(*) FROM watchlist WHERE user_id = ?", (user_id,))
             watchlist_cnt = cursor.fetchone()[0]
 
-            # 3. Searches Count
             cursor.execute("SELECT COUNT(*) FROM search_logs WHERE user_id = ?", (user_id,))
             search_cnt = cursor.fetchone()[0]
 
-            # 4. Sources Breakdown
             cursor.execute('''
                 SELECT source, COUNT(*) as cnt, SUM(progress_seconds) as total_sec
                 FROM watch_progress
@@ -379,7 +367,6 @@ class AdminService:
                     max_src_time = sec
                     favorite_source = src.upper()
 
-            # 5. Daily Watch Activity (Last 14 days)
             fourteen_days_ago = time.time() - (14 * 86400)
             cursor.execute('''
                 SELECT strftime('%Y-%m-%d', datetime(timestamp, 'unixepoch', 'localtime')) as watch_date,
@@ -407,7 +394,6 @@ class AdminService:
             daily_labels = [r["watch_date"] for r in daily_rows if r["watch_date"]]
             daily_hours = [round((r["total_sec"] or 0) / 3600.0, 2) for r in daily_rows if r["watch_date"]]
 
-            # 6. Peak Hourly Activity (00:00 to 23:00)
             cursor.execute('''
                 SELECT CAST(strftime('%H', datetime(timestamp, 'unixepoch', 'localtime')) AS INTEGER) as hr,
                        COUNT(*) as cnt
@@ -418,7 +404,6 @@ class AdminService:
             hourly_map = {r["hr"]: r["cnt"] for r in cursor.fetchall()}
             hourly_activity = [hourly_map.get(h, 0) for h in range(24)]
 
-            # 7. Genres calculation for watched series
             genre_counts = {}
             cursor.execute("SELECT DISTINCT source, content_id FROM watch_progress WHERE user_id = ?", (user_id,))
             watched_contents = cursor.fetchall()
@@ -439,7 +424,6 @@ class AdminService:
 
             top_genres = sorted(genre_counts.items(), key=lambda x: x[1], reverse=True)[:5]
 
-        # Format stats response
         hours_val = round(total_sec / 3600.0, 1)
         mins_val = int((total_sec % 3600) // 60)
 
@@ -532,17 +516,23 @@ class AdminService:
             "searches": searches
         }
 
-    # Database Explorer Helpers
+    @staticmethod
+    def _quote_identifier(name: str) -> str:
+        return '"' + name.replace('"', '""') + '"'
+
+    @staticmethod
+    def _list_tables(cursor) -> List[str]:
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+        return [r[0] for r in cursor.fetchall()]
+
     def get_db_tables(self, db_name: str) -> Dict[str, Any]:
         clean_db = self.db.sanitize_source(db_name) if db_name not in ["users", "user"] else "users"
         conn = self._get_db_conn(clean_db, row_factory=False)
         tables = []
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-            table_names = [r[0] for r in cursor.fetchall()]
-            for tbl in table_names:
-                cursor.execute(f"SELECT COUNT(*) FROM {tbl}")
+            for tbl in self._list_tables(cursor):
+                cursor.execute(f"SELECT COUNT(*) FROM {self._quote_identifier(tbl)}")
                 cnt = cursor.fetchone()[0]
                 tables.append({"name": tbl, "count": cnt})
         finally:
@@ -556,14 +546,16 @@ class AdminService:
 
         try:
             cursor = conn.cursor()
-            # Fetch Schema columns
-            cursor.execute(f"PRAGMA table_info('{table_name}')")
+            if table_name not in self._list_tables(cursor):
+                raise HTTPException(status_code=404, detail=f"Tabelle '{table_name}' existiert nicht")
+
+            quoted_table = self._quote_identifier(table_name)
+            cursor.execute(f"PRAGMA table_info({quoted_table})")
             schema = [dict(col) for col in cursor.fetchall()]
             col_names = [col["name"] for col in schema]
 
-            # Build query
-            sql = f"SELECT * FROM '{table_name}'"
-            count_sql = f"SELECT COUNT(*) FROM '{table_name}'"
+            sql = f"SELECT * FROM {quoted_table}"
+            count_sql = f"SELECT COUNT(*) FROM {quoted_table}"
             params = []
 
             if search and col_names:
@@ -571,7 +563,7 @@ class AdminService:
                 if not text_cols:
                     text_cols = col_names[:3]
 
-                where_clauses = [f"'{col}' LIKE ?" for col in text_cols]
+                where_clauses = [f"{self._quote_identifier(col)} LIKE ?" for col in text_cols]
                 sql += " WHERE " + " OR ".join(where_clauses)
                 count_sql += " WHERE " + " OR ".join(where_clauses)
                 params = [f"%{search}%"] * len(text_cols)

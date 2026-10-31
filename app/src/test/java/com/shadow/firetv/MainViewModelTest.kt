@@ -62,7 +62,7 @@ class MainViewModelTest {
         coEvery { repository.getMoviesByGenre("Action", 1, 20) } returns Result.success(movies)
 
         advanceUntilIdle()
-        viewModel.selectSidebarIndex(4) // Index 4 is "Action"
+        viewModel.selectSidebarIndex(4)
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -76,7 +76,7 @@ class MainViewModelTest {
     fun `selecting settings sidebar item emits NavigateToSettings event`() = runTest {
         advanceUntilIdle()
         viewModel.events.test {
-            viewModel.selectSidebarIndex(3) // Index 3 is "⚙️ Einstellungen"
+            viewModel.selectSidebarIndex(3)
             assertEquals(MainEvent.NavigateToSettings, awaitItem())
         }
     }
@@ -93,7 +93,7 @@ class MainViewModelTest {
         coEvery { repository.getContinueWatching() } returns Result.success(continueItems)
 
         advanceUntilIdle()
-        viewModel.selectSidebarIndex(0) // Index 0 is "📺 Weiterschauen"
+        viewModel.selectSidebarIndex(0)
         advanceUntilIdle()
 
         val state = viewModel.uiState.value

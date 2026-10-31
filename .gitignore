@@ -47,7 +47,8 @@ backend/*/__pycache__/
 backend/venv/
 backend/.venv/
 
-# SQLite runtime temporary WAL & SHM files
+# SQLite databases (runtime data, never commit)
+*.db
 *.db-shm
 *.db-wal
 *.db-journal
@@ -56,3 +57,13 @@ backend/.venv/
 config.json
 .artifacts/
 *.log
+
+# Backend APK distribution folder
+backend/updates/
+
+# Signing keys
+*.jks
+*.keystore
+
+# Local secrets (keystore, deploy keys)
+/secrets/

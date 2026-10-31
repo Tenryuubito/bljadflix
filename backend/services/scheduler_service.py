@@ -49,7 +49,6 @@ class SchedulerService:
             with self.lock:
                 self.next_run = time.time() + interval_sec
             
-            # Wait for interval or stop event
             if self._stop_event.wait(timeout=interval_sec):
                 break
                 

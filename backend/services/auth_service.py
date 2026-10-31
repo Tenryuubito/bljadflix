@@ -1,3 +1,4 @@
+import hmac
 import json
 import secrets
 import sqlite3
@@ -6,6 +7,7 @@ import urllib.request
 from typing import Optional, List, Dict
 from fastapi import HTTPException
 from database import DatabaseManager
+from passwords import verify_password
 from models.auth import LoginRequest, CreateUserRequest, UpdateUserRequest
 
 
@@ -259,28 +261,29 @@ class AuthService:
         with self.db.get_user_connection(row_factory=True) as conn:
             cursor = conn.cursor()
 
+            user = None
             if username and password:
                 cursor.execute(
-                    "SELECT id, username, is_active FROM users WHERE LOWER(username) = LOWER(?) AND (password = ? OR login_code = ?)",
-                    (username, password, password)
-                )
-            elif username:
-                cursor.execute(
-                    "SELECT id, username, is_active FROM users WHERE LOWER(username) = LOWER(?)",
+                    "SELECT id, username, is_active, password, login_code FROM users WHERE LOWER(username) = LOWER(?)",
                     (username,)
                 )
-            elif code:
+                candidate = cursor.fetchone()
+                if candidate and (
+                    verify_password(password, candidate["password"])
+                    or hmac.compare_digest(password.encode("utf-8"), str(candidate["login_code"]).encode("utf-8"))
+                ):
+                    user = candidate
+            elif code and not username:
                 cursor.execute(
                     "SELECT id, username, is_active FROM users WHERE login_code = ?",
                     (code,)
                 )
+                user = cursor.fetchone()
             else:
                 fail_info = self.record_failed_login(client_ip, req.device_id, req.device_name, user_agent)
                 if fail_info["banned"]:
                     raise HTTPException(status_code=403, detail="3 fehlgeschlagene Anmeldeversuche. Dieses Gerät wurde dauerhaft gesperrt.")
                 raise HTTPException(status_code=400, detail=f"Benutzername und Passwort erforderlich. Versuche: {fail_info['attempts']}/3")
-
-            user = cursor.fetchone()
 
             if not user or not user["is_active"]:
                 fail_info = self.record_failed_login(client_ip, req.device_id, req.device_name, user_agent)
@@ -294,7 +297,6 @@ class AuthService:
                     detail=f"Ungültige Anmeldedaten. Versuche: {fail_info['attempts']}/3. Verbleibende Versuche: {fail_info['remaining']}"
                 )
 
-            # Login successful: clear failed attempt counter
             self.clear_failed_attempts(client_ip, req.device_id)
 
             user_id = user["id"]

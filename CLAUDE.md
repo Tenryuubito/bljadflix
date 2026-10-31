@@ -1,0 +1,89 @@
+# CLAUDE.md
+
+Bljadflix: Streaming-Client für Amazon Fire TV mit eigenem Python-Backend, das Serien-/Film-Kataloge von Drittseiten indexiert und Stream-URLs auflöst. UI-Texte, Logs und Fehlermeldungen sind auf Deutsch.
+
+## Module
+
+| Pfad | Inhalt |
+|---|---|
+| `app/` | Fire-TV-App (`com.shadow.firetv`), Kotlin, XML-Views |
+| `installer/` | Launcher/Updater-App (`com.shadow.firetv.installer`), vergleicht die installierte Version mit `/app/version`, lädt die Haupt-App-APK und installiert sie. Kein Login. |
+| `backend/` | FastAPI-Server, SQLite, Scraper/Indexer, Admin-Dashboard |
+| `setup_server.sh` | Einrichtung auf Ubuntu-VPS (venv, `config.json`, systemd-Dienst `bljadflix`) |
+| `start_backend.bat` | Backend lokal unter Windows starten |
+
+## Befehle
+
+Entwickelt wird unter Windows (Android Studio, JDK 17). `gradle.properties` setzt `org.gradle.java.home` auf einen Windows-Pfad, deshalb laufen Gradle-Befehle in WSL nicht.
+
+```bat
+gradlew.bat :app:assembleDebug
+gradlew.bat :installer:assembleDebug
+gradlew.bat :app:testDebugUnitTest
+gradlew.bat :app:testDebugUnitTest --tests "com.shadow.firetv.MainViewModelTest"
+gradlew.bat :app:assembleDebug -PbackendUrl=http://10.0.0.5:8000/
+```
+
+Backend (Python 3, Abhängigkeiten in `backend/requirements.txt`, für Tests zusätzlich `httpx`):
+
+```bash
+cd backend
+python app_backend.py
+python indexer.py --source sto --limit 10
+python indexer.py --full
+python -m unittest discover -s tests -t .
+python -m unittest tests.test_sto_indexer
+```
+
+`config.json` liegt im Projekt-Hauptverzeichnis (nicht in `backend/`), ist gitignored und Pflicht. Ohne `backend_port` beendet sich das Backend sofort. Ohne `admin_password` bleiben Dashboard und alle Admin-Routen gesperrt (503). Optional sind `backend_ip`, `default_source`, `indexer_interval_hours` und `sources`. Die Umgebungsvariablen `BLJADFLIX_CONFIG` und `BLJADFLIX_DB_DIR` überschreiben den Pfad zur Konfiguration bzw. zu den Datenbanken.
+
+## CI/CD und Verteilung
+
+`.github/workflows/deploy.yml` läuft bei jedem Push auf `main` und lässt sich auch manuell starten:
+
+1. `backend-tests`: Backend-Unit-Tests.
+2. `android-build`: Android-Unit-Tests, danach signierte Release-APKs von App und Installer. Die Backend-Adresse kommt aus der Repository-Variable `BACKEND_URL`, `versionCode` ist die GitHub-Run-Nummer, `versionName` lautet `1.0.<run>`. Der Job schreibt außerdem `version.json`.
+3. `deploy` (nur wenn 1 und 2 grün sind): überträgt `backend/` per rsync nach `~/bljadflix/backend/` auf der Google-Cloud-VM. `*.db`, `config.json` und `updates/` bleiben dabei unangetastet. Danach werden APKs und `version.json` nach `backend/updates/` verschoben, `pip install` ausgeführt, `bljadflix` neu gestartet und `/app/version` geprüft.
+
+Benötigte Secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, optional `DEPLOY_KNOWN_HOSTS`, außerdem `SIGNING_KEYSTORE_BASE64`, `SIGNING_KEYSTORE_PASSWORD`, `SIGNING_KEY_ALIAS` und `SIGNING_KEY_PASSWORD`. Variable: `BACKEND_URL`. Lokal gebaute Release-APKs werden nur signiert, wenn `SIGNING_KEYSTORE_PATH` gesetzt ist. Den Keystore niemals wechseln, sonst lassen sich installierte Apps nicht mehr aktualisieren.
+
+Erstinstallation auf einem Fire TV: In der App „Downloader“ `http://<server>:8000/install` öffnen. Das leitet auf die Installer-APK weiter. Der Installer lädt dann die Haupt-App und installiert später auch deren Updates. Sich selbst aktualisiert er nicht, neue Installer-Versionen müssen erneut über `/install` geladen werden.
+
+## Android-App
+
+- Architektur: MVVM mit `StateFlow` (UI-State) und `SharedFlow` (Einmal-Events wie Toasts und Navigation). ViewModels liegen unter `feature/<name>/`, die zugehörigen Activities teilweise noch im Root-Paket (`MainActivity`, `SeriesDetailActivity`, `PlayerActivity`).
+- Kein DI-Framework: Jedes ViewModel hat eine verschachtelte `Factory`, deren Default-Parameter die echten Abhängigkeiten liefern. Tests übergeben Mocks direkt an den Konstruktor.
+- `AuthManager`, `SourceManager` und `ThemeManager` sind Singletons über `getInstance(context)` und speichern in SharedPreferences. Für Tests gibt es `createForTesting(prefs)`. Initialisiert werden sie in `BljadflixApplication`.
+- Netzwerk: `RetrofitClient` nutzt `BuildConfig.BACKEND_URL` (Gradle-Property `backendUrl`, Standard in `app/build.gradle.kts`). `AuthInterceptor` setzt `Authorization: Bearer` und `X-Device-ID` und löscht die Session bei 401/409. `MovieRepositoryImpl` kapselt jeden Aufruf in `safeApiCall` → `Result<T>` und übernimmt `detail` aus FastAPI-Fehlerantworten als Fehlermeldung.
+- DTOs in `core/model/Models.kt` verwenden snake_case-Feldnamen, damit Gson ohne Annotationen auf das Backend-JSON passt.
+- Quelle (`StreamingSource`: aniworld, sto, filmo): Das Repository setzt sie als `source`-Query-Parameter bzw. als `source`-Feld in `ProgressRequest`/`WatchlistRequest`. Methoden mit optionalem `source`-Parameter fallen auf die aktive Quelle zurück. Inhalte aus Watchlist und „Weiterschauen“ können aus einer anderen Quelle stammen, deshalb wird ihre Quelle als Intent-Extra `SOURCE` an Detail- und Player-Screen weitergegeben.
+- Player: Es gibt kein ExoPlayer. `PlayerActivity` lädt die aufgelöste Hoster-URL in eine WebView und steuert `<video>` bzw. jwplayer per injiziertem JavaScript. Fortschritt wird periodisch an `/progress` gemeldet, ab 90 % gilt eine Folge als gesehen, am Ende startet automatisch die nächste.
+- Sidebar-Einträge in `MainViewModel` sind deutsche Strings mit Emoji (`"📺 Weiterschauen"`, `"⚙️ Einstellungen"` …) und werden per String-Vergleich ausgewertet, auch in `SidebarAdapter`. Bei Umbenennungen alle Stellen inklusive Tests anpassen.
+- D-Pad-Fokus wird in den Adaptern explizit gesteuert (`setOnKeyListener`, Fokus-Skalierung über `animate()`). Jedes interaktive Element muss fokussierbar bleiben.
+- Bilder lädt Glide mit `DecodeFormat.PREFER_RGB_565`, um auf Fire-TV-Sticks Speicher zu sparen.
+
+## Backend
+
+- `app_backend.py` erzeugt alle Services als Modul-Globals und definiert sämtliche Routen. Logik gehört in `services/`, Pydantic-Modelle in `models/`.
+- Datenbanken (SQLite, WAL) liegen in `backend/`: `users.db` für Nutzer, Sessions, Fortschritt, Watchlist, Logs und Sperren, dazu je Quelle `movies_<source>.db` (`content_index`, `episodes`, `video_links`). Content-IDs sind nur innerhalb einer Quelle eindeutig, deshalb trägt jede Nutzer-Tabelle eine `source`-Spalte. `DatabaseManager.sanitize_source` bereinigt Quellnamen und fällt auf `aniworld` zurück.
+- Schema-Änderungen laufen nur über `CREATE TABLE IF NOT EXISTS` in `DatabaseManager.init_db()`. Migrationen gibt es keine.
+- Indexer: `services/indexers/<quelle>_indexer.py` erben von `BaseIndexer` (Retry, rotierende User-Agents, `save_series_to_db`) und implementieren `process_single_series(url)` und `scrape_all_series(limit, incremental)`. `IndexerService` verteilt nach Quelle, `SchedulerService` startet alle `indexer_interval_hours` (Standard 12) einen Lauf. Fortschritt landet in `indexer_logger` und erscheint live im Dashboard.
+- `StreamService.resolve_stream` folgt Redirects und iframes bis zur Hoster- oder Medien-URL und speichert das Ergebnis 2 h in `video_links`.
+- Nutzer-Login: Benutzername plus Passwort oder Anmeldecode, alternativ nur der Anmeldecode. Benutzername allein reicht nicht. Passwörter werden als PBKDF2-Hash gespeichert (`passwords.py`), noch vorhandene Klartext-Passwörter wandelt `init_db()` beim Start um. Standardnutzer werden nicht mehr angelegt, Nutzer entstehen über das Dashboard.
+- Eine aktive Session pro Nutzer. Ein Login auf einem anderen Gerät ersetzt die Session, das alte Gerät bekommt 409. Nach 3 Fehlversuchen werden IP und Gerät dauerhaft gesperrt (`banned_devices`). Die Middleware blockt gesperrte Clients bei jedem Request.
+- Admin-Dashboard: `/dashboard` liefert das HTML aus `dashboard_view.py` (Tailwind, Chart.js, Vanilla JS). Die Anmeldung erfolgt mit `admin_password` über `POST /admin/api/login`, das ein Token zurückgibt (12 h gültig, nur im Speicher, nach 5 Fehlversuchen 15 min Sperre pro IP). Das Dashboard speichert es in `sessionStorage` und schickt es als `X-Admin-Token` mit. Alle `/admin/*`-Routen außer Login, Logout und Dashboard-Seite hängen an `admin_router` mit `Depends(require_admin)`. `/admin/trigger-index` akzeptiert auch ein normales Nutzer-Token, weil die TV-App den Indexer startet. Neue Admin-Routen gehören an `admin_router`, nicht an `app`.
+- Datenbank-Explorer: Tabellennamen werden gegen `sqlite_master` geprüft und Bezeichner mit `_quote_identifier` maskiert. Niemals Namen ungeprüft in SQL einsetzen.
+- App-Verteilung (öffentlich, ohne Login): `/app/version` liest `backend/updates/version.json`. `/app/download/main` und `/app/download/launcher` liefern die APKs aus `backend/updates/` und fallen sonst auf die Debug-Build-Ausgaben zurück.
+
+## Tests
+
+- Android: JUnit 4, MockK, kotlinx-coroutines-test (`MainDispatcherRule`), Turbine. Die Tests liegen flach in `app/src/test/java/com/shadow/firetv/`.
+- Backend: `unittest`. `tests/__init__.py` setzt `BLJADFLIX_DB_DIR` und `BLJADFLIX_CONFIG` auf ein temporäres Verzeichnis (Admin-Passwort: `tests.TEST_ADMIN_PASSWORD`), bevor `app_backend` importiert wird. Testmodule, die `app_backend` importieren, müssen vorher `import tests` ausführen, damit sie auch einzeln nie die echten Datenbanken anfassen. Die Indexer- und Stream-Tests mocken HTTP.
+
+## Konventionen
+
+- Keine Kommentare im Code.
+- Neue Ressourcen nur anlegen, wenn sie auch referenziert werden. Ungenutzte Strings, Farben und Layouts wurden entfernt.
+- Datenbankdateien (`*.db`) und `config.json` niemals committen.
+- Die Backend-Adresse für App und Installer kommt aus `BuildConfig.BACKEND_URL`. Der Standardwert steht in `app/build.gradle.kts` und `installer/build.gradle.kts`, überschreiben lässt er sich mit `-PbackendUrl=...`.
+- `.cursorrules` und `FIRE_TV_RULES.md` enthalten die Fire-TV-Regeln (D-Pad-Fokus, keine GMS-Abhängigkeiten, Overscan-Ränder, Schriftgrößen) und gelten zusätzlich zu dieser Datei.
