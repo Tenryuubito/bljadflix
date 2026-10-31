@@ -74,6 +74,7 @@ class MainActivity : AppCompatActivity() {
     private val scrollPositions = mutableMapOf<String, Int>()
     private var renderedScrollKey: String? = null
     private var pendingScrollRestore: Int? = null
+    private var pendingSearchFocus = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -163,6 +164,10 @@ class MainActivity : AppCompatActivity() {
             },
             onFocusLeft = { view ->
                 val nextFocus = view.focusSearch(View.FOCUS_LEFT)
+                if (nextFocus != null && nextFocus.parent !== rvContentGrid && viewModel.uiState.value.mode == MainMode.SEARCH) {
+                    etSearch.requestFocus()
+                    return@MovieAdapter true
+                }
                 if (nextFocus != null && nextFocus.parent === rvSidebarCategories) {
                     val targetPos = sidebarAdapter.getSelectedIndex()
                     if (targetPos != -1) {
@@ -287,18 +292,47 @@ class MainActivity : AppCompatActivity() {
                 (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER)
             ) {
                 val query = etSearch.text.toString().trim()
-                if (query.isNotEmpty()) {
-                    sidebarAdapter.clearSelection()
-                    viewModel.onSearchQueryChanged(query)
-                }
-                etSearch.clearFocus()
-                rvContentGrid.requestFocus()
                 val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager
                 imm?.hideSoftInputFromWindow(etSearch.windowToken, 0)
+                if (query.isNotEmpty()) {
+                    sidebarAdapter.clearSelection()
+                    if (hasSearchResults(query)) {
+                        focusFirstResult()
+                    } else {
+                        pendingSearchFocus = true
+                        viewModel.onSearchQueryChanged(query)
+                    }
+                }
                 true
             } else {
                 false
             }
+        }
+
+        etSearch.setOnKeyListener { _, keyCode, event ->
+            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+            val atEnd = etSearch.selectionEnd == etSearch.text.length
+            val wantsResults = keyCode == KeyEvent.KEYCODE_DPAD_DOWN || (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && atEnd)
+            if (wantsResults && hasSearchResults(etSearch.text.toString().trim())) {
+                focusFirstResult()
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    private fun hasSearchResults(query: String): Boolean {
+        val state = viewModel.uiState.value
+        return query.isNotEmpty() && state.mode == MainMode.SEARCH && state.currentQuery == query &&
+            !state.isLoading && state.movies.isNotEmpty() && rvContentGrid.adapter === gridAdapter
+    }
+
+    private fun focusFirstResult() {
+        pendingSearchFocus = false
+        rvContentGrid.scrollToPosition(0)
+        rvContentGrid.post {
+            layoutManager.findViewByPosition(0)?.requestFocus()
         }
     }
 
@@ -402,7 +436,15 @@ class MainActivity : AppCompatActivity() {
                     pendingScrollRestore = null
                     layoutManager.scrollToPositionWithOffset(target, 0)
                 }
+                if (pendingSearchFocus && state.mode == MainMode.SEARCH && !state.isLoading &&
+                    state.currentQuery == etSearch.text.toString().trim()
+                ) {
+                    if (state.movies.isNotEmpty()) focusFirstResult() else pendingSearchFocus = false
+                }
             }
+        }
+        if (pendingSearchFocus && state.mode == MainMode.SEARCH && !state.isLoading && state.errorMessage != null) {
+            pendingSearchFocus = false
         }
 
         splashProgressBar.progress = state.initProgressPercent
