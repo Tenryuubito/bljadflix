@@ -21,13 +21,17 @@ class HosterLinkResolver(
     private val client: OkHttpClient = defaultClient
 ) {
 
-    suspend fun resolve(episodePageUrl: String): Result<StreamResponse> = withContext(Dispatchers.IO) {
+    suspend fun resolve(episodePageUrl: String, skip: Int = 0): Result<StreamResponse> = withContext(Dispatchers.IO) {
         runCatching {
             val pageUrl = HttpUrl.parse(episodePageUrl) ?: throw IOException("Ungültige Episoden-URL")
             val html = fetch(pageUrl, referer = null).second
-            val link = pickBest(parseHosterLinks(html))
+            val links = rankLinks(parseHosterLinks(html))
             val target = when {
-                link != null -> pageUrl.resolve(link.target)
+                links.isNotEmpty() -> {
+                    val link = links.getOrNull(skip) ?: throw IOException("Keine weiteren Hoster verfügbar")
+                    pageUrl.resolve(link.target)
+                }
+                skip > 0 -> throw IOException("Keine weiteren Hoster verfügbar")
                 else -> parseIframeSrc(html)?.let { pageUrl.resolve(it) }
             } ?: throw IOException("Kein Hoster auf der Episodenseite gefunden")
 
@@ -82,8 +86,10 @@ class HosterLinkResolver(
             }.toList()
         }
 
-        fun pickBest(links: List<HosterLink>): HosterLink? {
-            return links.minWithOrNull(
+        fun pickBest(links: List<HosterLink>): HosterLink? = rankLinks(links).firstOrNull()
+
+        fun rankLinks(links: List<HosterLink>): List<HosterLink> {
+            return links.sortedWith(
                 compareBy<HosterLink> { rank(LANGUAGE_PREFERENCE, it.languageKey) }
                     .thenBy { rank(HOSTER_PREFERENCE, it.hosterName.lowercase()) }
             )

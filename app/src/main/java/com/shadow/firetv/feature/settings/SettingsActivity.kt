@@ -43,6 +43,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var progressIndexer: ProgressBar
     private lateinit var tvIndexerStatus: TextView
     private lateinit var btnClearCache: Button
+    private lateinit var btnToggleIntro: Button
     private lateinit var btnLogout: Button
 
     private val viewModel: SettingsViewModel by viewModels { SettingsViewModel.Factory() }
@@ -67,6 +68,7 @@ class SettingsActivity : AppCompatActivity() {
         progressIndexer = findViewById(R.id.progress_indexer)
         tvIndexerStatus = findViewById(R.id.tv_indexer_status)
         btnClearCache = findViewById(R.id.btn_clear_cache)
+        btnToggleIntro = findViewById(R.id.btn_toggle_intro)
         btnLogout = findViewById(R.id.btn_logout)
 
         setupSpinners()
@@ -144,6 +146,7 @@ class SettingsActivity : AppCompatActivity() {
         btnSyncUserData.onFocusChangeListener = focusListener
         btnTriggerIndexer.onFocusChangeListener = focusListener
         btnClearCache.onFocusChangeListener = focusListener
+        btnToggleIntro.onFocusChangeListener = focusListener
         btnLogout.onFocusChangeListener = focusListener
 
         btnSyncUserData.setOnClickListener {
@@ -152,6 +155,10 @@ class SettingsActivity : AppCompatActivity() {
 
         btnTriggerIndexer.setOnClickListener {
             viewModel.triggerIndexer()
+        }
+
+        btnToggleIntro.setOnClickListener {
+            viewModel.toggleIntro()
         }
 
         btnClearCache.setOnClickListener {
@@ -217,6 +224,8 @@ class SettingsActivity : AppCompatActivity() {
         if (themeIndex != -1 && spinnerTheme.selectedItemPosition != themeIndex) {
             spinnerTheme.setSelection(themeIndex, false)
         }
+
+        btnToggleIntro.text = getString(if (state.isIntroEnabled) R.string.settings_intro_on else R.string.settings_intro_off)
 
         tvProfileUsername.text = state.username
         tvProfileUserId.text = if (state.userId != -1) "#${state.userId}" else "-"

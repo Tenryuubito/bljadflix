@@ -29,10 +29,11 @@ class MovieAdapter(
 
     private val differ = AsyncListDiffer(this, diffCallback)
 
-    fun setMovies(newMovies: List<Movie>, endOfList: Boolean = false) {
+    fun setMovies(newMovies: List<Movie>, endOfList: Boolean = false, onCommitted: (() -> Unit)? = null) {
         pendingEndOfList = endOfList
         differ.submitList(newMovies) {
             applyFooterState()
+            onCommitted?.invoke()
         }
     }
 

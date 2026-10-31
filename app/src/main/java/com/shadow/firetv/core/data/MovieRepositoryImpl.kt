@@ -102,6 +102,9 @@ class MovieRepositoryImpl(
     override suspend fun getContinueWatching(): Result<List<ContinueWatchingItem>> =
         safeApiCall { api.getContinueWatching() }
 
+    override suspend fun hideContinueWatching(contentId: Int, source: String?): Result<Unit> =
+        safeApiCall { api.hideContinueWatching(contentId, sourceId(source)) }
+
     override suspend fun getWatchlist(page: Int, limit: Int): Result<List<Movie>> =
         safeApiCall { api.getWatchlist(page, limit) }
 

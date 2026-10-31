@@ -97,12 +97,30 @@
             android:paddingEnd="28dp"
             android:paddingTop="24dp">
 
-            <com.shadow.firetv.core.ui.FocusContainedRecyclerView
-                android:id="@+id/rv_content_grid"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:clipToPadding="false"
-                android:paddingBottom="32dp"/>
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tv_content_hint"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginBottom="8dp"
+                    android:text="@string/continue_watching_hint"
+                    android:textColor="@color/text_muted"
+                    android:textSize="15sp"
+                    android:visibility="gone" />
+
+                <com.shadow.firetv.core.ui.FocusContainedRecyclerView
+                    android:id="@+id/rv_content_grid"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:clipToPadding="false"
+                    android:paddingBottom="32dp"/>
+            </LinearLayout>
 
             <ProgressBar
                 android:id="@+id/progress_main"
@@ -112,15 +130,37 @@
                 android:indeterminateTint="@color/primary"
                 android:visibility="gone" />
 
-            <TextView
-                android:id="@+id/tv_empty"
+            <LinearLayout
+                android:id="@+id/layout_empty_state"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:text="Keine Inhalte gefunden."
-                android:textColor="@color/text_muted"
-                android:textSize="20sp"
-                android:visibility="gone"/>
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/tv_empty"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:maxWidth="520dp"
+                    android:gravity="center"
+                    android:textColor="@color/text_muted"
+                    android:textSize="20sp" />
+
+                <Button
+                    android:id="@+id/btn_retry"
+                    style="@style/TvButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:background="@drawable/bg_input_selector"
+                    android:backgroundTint="@color/button_secondary"
+                    android:drawableStart="@drawable/ic_sync"
+                    android:drawablePadding="12dp"
+                    android:text="@string/btn_retry"
+                    android:visibility="gone" />
+            </LinearLayout>
 
         </FrameLayout>
     </LinearLayout>
@@ -208,6 +248,18 @@
                     android:textStyle="bold" />
             </LinearLayout>
         </LinearLayout>
+
+        <TextView
+            android:id="@+id/splash_skip_hint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/tv_margin_vertical"
+            android:text="@string/splash_skip_hint"
+            android:textColor="@color/text_secondary"
+            android:textSize="15sp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 

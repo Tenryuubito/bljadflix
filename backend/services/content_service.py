@@ -178,8 +178,17 @@ class ContentService:
                 ''', (user_id, src))
                 series_rows = u_cursor.fetchall()
 
+                u_cursor.execute('''
+                    SELECT content_id, hidden_at FROM hidden_continue_watching
+                    WHERE user_id = ? AND source = ?
+                ''', (user_id, src))
+                hidden_map = {r["content_id"]: r["hidden_at"] for r in u_cursor.fetchall()}
+
                 for s_row in series_rows:
                     c_id = s_row["content_id"]
+                    hidden_at = hidden_map.get(c_id)
+                    if hidden_at is not None and hidden_at >= (s_row["last_watched"] or 0):
+                        continue
 
                     with self.db.get_content_connection(src, row_factory=True) as c_conn:
                         c_cursor = c_conn.cursor()
@@ -243,6 +252,18 @@ class ContentService:
 
         results.sort(key=lambda x: x.get("last_watched_at", 0), reverse=True)
         return results[:20]
+
+    def hide_continue_watching(self, user_id: int, source: Optional[str] = "aniworld", content_id: int = 0) -> dict:
+        clean_source = self.db.sanitize_source(source)
+        with self.db.get_user_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO hidden_continue_watching (user_id, source, content_id, hidden_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id, source, content_id) DO UPDATE SET hidden_at = excluded.hidden_at
+            ''', (user_id, clean_source, content_id, time.time()))
+            conn.commit()
+        return {"status": "success"}
 
     def update_watchlist(self, user_id: int, source: Optional[str] = "aniworld", req: WatchlistRequest = None) -> dict:
         clean_source = self.db.sanitize_source(source or (req.source if hasattr(req, 'source') else "aniworld"))

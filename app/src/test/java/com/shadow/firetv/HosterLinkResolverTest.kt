@@ -84,6 +84,28 @@ class HosterLinkResolverTest {
     }
 
     @Test
+    fun `resolve with skip uses the next ranked hoster and fails when none are left`() = runTest {
+        val client = OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val body = if (request.url().encodedPath().startsWith("/redirect/")) "" else episodeHtml
+                Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(ResponseBody.create(MediaType.parse("text/html"), body))
+                    .build()
+            }
+            .build()
+        val resolver = HosterLinkResolver(client)
+        val episodeUrl = "https://aniworld.to/anime/stream/test/staffel-1/episode-1"
+
+        assertEquals("https://aniworld.to/redirect/3941745", resolver.resolve(episodeUrl, skip = 1).getOrThrow().stream_url)
+        assertTrue(resolver.resolve(episodeUrl, skip = 3).isFailure)
+    }
+
+    @Test
     fun `resolve fails when page has no hoster`() = runTest {
         val client = OkHttpClient.Builder()
             .addInterceptor { chain ->

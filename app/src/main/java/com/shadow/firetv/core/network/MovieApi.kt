@@ -14,6 +14,7 @@ import com.shadow.firetv.core.model.TriggerIndexResponse
 import com.shadow.firetv.core.model.WatchlistRequest
 import com.shadow.firetv.core.model.WatchlistStatus
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -81,6 +82,12 @@ interface MovieApi {
 
     @GET("continue-watching")
     suspend fun getContinueWatching(): List<ContinueWatchingItem>
+
+    @DELETE("continue-watching/{content_id}")
+    suspend fun hideContinueWatching(
+        @Path("content_id") contentId: Int,
+        @Query("source") source: String? = null
+    )
 
     @GET("watchlist")
     suspend fun getWatchlist(

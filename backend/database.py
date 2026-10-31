@@ -130,6 +130,17 @@ class DatabaseManager:
                 ''')
 
                 cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS hidden_continue_watching (
+                        user_id INTEGER NOT NULL DEFAULT 1,
+                        source TEXT NOT NULL DEFAULT 'aniworld',
+                        content_id INTEGER NOT NULL,
+                        hidden_at REAL NOT NULL,
+                        PRIMARY KEY (user_id, source, content_id),
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )
+                ''')
+
+                cursor.execute('''
                     CREATE TABLE IF NOT EXISTS watch_logs (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         user_id INTEGER NOT NULL DEFAULT 1,

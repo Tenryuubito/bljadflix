@@ -175,4 +175,89 @@ class MainViewModelTest {
         assertEquals(StreamingSource.FILMO, state.selectedSource)
         assertEquals(StreamingSource.FILMO, sourceManager.getSelectedSource())
     }
+
+    @Test
+    fun `hiding continue watching item removes it and calls repository`() = runTest {
+        val first = ContinueWatchingItem(
+            id = 1, title = "Show", description = null, cover_url = null, genre = null,
+            episode_id = 10, season_number = 1, episode_number = 2, episode_title = null,
+            progress_seconds = 100f, duration_seconds = 1000f, source = "sto"
+        )
+        val second = first.copy(id = 2, title = "Other")
+        coEvery { repository.getContinueWatching() } returns Result.success(listOf(first, second))
+        coEvery { repository.hideContinueWatching(1, "sto") } returns Result.success(Unit)
+
+        advanceUntilIdle()
+        viewModel.selectSidebarIndex(0)
+        advanceUntilIdle()
+        viewModel.events.test {
+            viewModel.hideContinueWatching(first)
+            assertEquals(MainEvent.ShowToast("„Show“ aus Weiterschauen entfernt"), awaitItem())
+        }
+
+        assertEquals(listOf(second), viewModel.uiState.value.continueWatchingItems)
+        coVerify { repository.hideContinueWatching(1, "sto") }
+    }
+
+    @Test
+    fun `failed hide restores continue watching item`() = runTest {
+        val item = ContinueWatchingItem(
+            id = 1, title = "Show", description = null, cover_url = null, genre = null,
+            episode_id = 10, season_number = 1, episode_number = 2, episode_title = null,
+            progress_seconds = 100f, duration_seconds = 1000f, source = "sto"
+        )
+        coEvery { repository.getContinueWatching() } returns Result.success(listOf(item))
+        coEvery { repository.hideContinueWatching(1, "sto") } returns Result.failure(RuntimeException("offline"))
+
+        advanceUntilIdle()
+        viewModel.selectSidebarIndex(0)
+        advanceUntilIdle()
+        viewModel.hideContinueWatching(item)
+        advanceUntilIdle()
+
+        assertEquals(listOf(item), viewModel.uiState.value.continueWatchingItems)
+    }
+
+    @Test
+    fun `loading error offers retry and retry reloads content`() = runTest {
+        val movies = listOf(Movie(1, "Movie 1", "Desc", "url", "pageUrl", "Action"))
+        coEvery { repository.getMoviesByGenre("Action", 1, 20) } returnsMany listOf(
+            Result.failure(RuntimeException("Server nicht erreichbar")),
+            Result.success(movies)
+        )
+
+        advanceUntilIdle()
+        viewModel.selectSidebarIndex(3)
+        advanceUntilIdle()
+
+        val failed = viewModel.uiState.value
+        assertEquals("Server nicht erreichbar", failed.errorMessage)
+        assertTrue(failed.canRetry)
+
+        viewModel.retry()
+        advanceUntilIdle()
+
+        val recovered = viewModel.uiState.value
+        assertEquals(movies, recovered.movies)
+        assertFalse(recovered.canRetry)
+    }
+
+    @Test
+    fun `returning to a loaded genre uses cached content`() = runTest {
+        val actionMovies = listOf(Movie(1, "Movie 1", "Desc", "url", "pageUrl", "Action"))
+        val comedyMovies = listOf(Movie(2, "Movie 2", "Desc", "url", "pageUrl", "Comedy"))
+        coEvery { repository.getMoviesByGenre("Action", 1, 20) } returns Result.success(actionMovies)
+        coEvery { repository.getMoviesByGenre("Comedy", 1, 20) } returns Result.success(comedyMovies)
+
+        advanceUntilIdle()
+        viewModel.selectSidebarIndex(3)
+        advanceUntilIdle()
+        viewModel.selectSidebarIndex(4)
+        advanceUntilIdle()
+        viewModel.selectSidebarIndex(3)
+
+        assertEquals(actionMovies, viewModel.uiState.value.movies)
+        assertFalse(viewModel.uiState.value.isLoading)
+        coVerify(exactly = 1) { repository.getMoviesByGenre("Action", 1, 20) }
+    }
 }

@@ -33,6 +33,7 @@ interface MovieRepository {
     suspend fun reindexSeries(contentId: Int, source: String? = null): Result<TriggerIndexResponse>
     suspend fun updateProgress(request: ProgressRequest): Result<Unit>
     suspend fun getContinueWatching(): Result<List<ContinueWatchingItem>>
+    suspend fun hideContinueWatching(contentId: Int, source: String? = null): Result<Unit>
     suspend fun getWatchlist(page: Int = 1, limit: Int = 20): Result<List<Movie>>
     suspend fun getWatchlistStatus(contentId: Int, source: String? = null): Result<WatchlistStatus>
     suspend fun updateWatchlist(request: WatchlistRequest): Result<Unit>

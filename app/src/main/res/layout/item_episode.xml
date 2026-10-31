@@ -47,7 +47,28 @@
             android:layout_marginTop="6dp"
             android:progressTint="@color/primary"
             android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tv_ep_remaining"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="@color/text_muted"
+            android:textSize="14sp"
+            android:visibility="gone" />
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/tv_ep_continue"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:background="@drawable/bg_pill"
+        android:text="@string/episode_continue_badge"
+        android:textColor="@color/accent_gold"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
 
     <ImageView
         android:id="@+id/iv_check"

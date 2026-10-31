@@ -38,6 +38,7 @@ class ThemeManager private constructor(private var sharedPreferences: SharedPref
     companion object {
         private const val PREF_NAME = "firetv_theme_prefs"
         private const val KEY_THEME_ID = "selected_theme_id"
+        private const val KEY_INTRO_ENABLED = "intro_enabled"
 
         @Volatile
         private var instance: ThemeManager? = null
@@ -80,6 +81,12 @@ class ThemeManager private constructor(private var sharedPreferences: SharedPref
         sharedPreferences?.edit()?.putString(KEY_THEME_ID, theme.id)?.apply()
     }
 
+    fun isIntroEnabled(): Boolean = sharedPreferences?.getBoolean(KEY_INTRO_ENABLED, true) ?: true
+
+    fun setIntroEnabled(enabled: Boolean) {
+        sharedPreferences?.edit()?.putBoolean(KEY_INTRO_ENABLED, enabled)?.apply()
+    }
+
     fun applyTheme(activity: Activity) {
         val theme = getSelectedTheme()
         activity.window?.decorView?.setBackgroundResource(theme.backgroundResId)
@@ -93,8 +100,11 @@ class ThemeManager private constructor(private var sharedPreferences: SharedPref
         }
     }
 
+    fun getOnPrimaryColorInt(): Int {
+        return if (getSelectedTheme() == AppTheme.CLASSIC_DARK) Color.WHITE else Color.BLACK
+    }
+
     fun applySidebarTheme(view: View, textView: TextView) {
-        val theme = getSelectedTheme()
         val primaryColor = getPrimaryColorInt()
         val defaultBgColor = Color.parseColor("#1A1A1A")
 
@@ -111,11 +121,7 @@ class ThemeManager private constructor(private var sharedPreferences: SharedPref
 
         view.background = stateListDrawable
 
-        val textColorOnAccent = if (theme == AppTheme.CLASSIC_DARK) {
-            Color.WHITE
-        } else {
-            Color.BLACK
-        }
+        val textColorOnAccent = getOnPrimaryColorInt()
 
         val textColorDefault = Color.parseColor("#AAAAAA")
 

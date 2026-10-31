@@ -38,12 +38,19 @@ data class MainUiState(
     val isEndOfList: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
+    val canRetry: Boolean = false,
     val lastLoadedPage: Int = 1,
     val isInitializing: Boolean = true,
     val initCurrentStep: Int = 0,
     val initTotalSteps: Int = 1,
     val initStepDescription: String = "Starte Anwendung...",
     val initProgressPercent: Int = 0
+)
+
+private data class GenreCache(
+    val movies: List<Movie>,
+    val lastLoadedPage: Int,
+    val isEndOfList: Boolean
 )
 
 sealed interface MainEvent {
@@ -70,6 +77,7 @@ class MainViewModel(
     private var initJob: Job? = null
     private val maxSyncPolls = 150
     private var lastNonSearchSidebarIndex = 0
+    private val genreCache = mutableMapOf<String, GenreCache>()
 
     init {
         startAppInitialization()
@@ -106,8 +114,7 @@ class MainViewModel(
                     genresList = emptyList()
                 }
 
-            val baseComponents = listOf("📺 Weiterschauen", "⭐ Meine Watchlist", "🎬 Alle Serien")
-            val sidebarItems = baseComponents + genresList
+            val sidebarItems = BASE_SIDEBAR_ITEMS + genresList
             _uiState.update { it.copy(sidebarItems = sidebarItems, selectedSource = currentSource) }
 
             updateInitProgress(3, 5, "Synchronisiere Benutzerinhalte vom Server...", 60)
@@ -216,6 +223,7 @@ class MainViewModel(
     fun onSourceChanged(source: StreamingSource) {
         if (_uiState.value.selectedSource == source) return
         sourceManager.setSelectedSource(source)
+        genreCache.clear()
         _uiState.update { it.copy(selectedSource = source) }
         loadSidebar()
         loadContentBottom(isReset = true)
@@ -227,6 +235,7 @@ class MainViewModel(
     fun refreshState() {
         val currentSource = sourceManager.getSelectedSource()
         if (_uiState.value.selectedSource != currentSource) {
+            genreCache.clear()
             _uiState.update { it.copy(selectedSource = currentSource) }
             loadSidebar()
             loadContentBottom(isReset = true)
@@ -245,14 +254,10 @@ class MainViewModel(
         viewModelScope.launch {
             repository.getGenres()
                 .onSuccess { genres ->
-                    val items = mutableListOf("📺 Weiterschauen", "⭐ Meine Watchlist", "🎬 Alle Serien").apply {
-                        addAll(sanitizeGenres(genres))
-                    }
-                    _uiState.update { it.copy(sidebarItems = items) }
+                    _uiState.update { it.copy(sidebarItems = BASE_SIDEBAR_ITEMS + sanitizeGenres(genres)) }
                 }
                 .onFailure {
-                    val defaultItems = listOf("📺 Weiterschauen", "⭐ Meine Watchlist", "🎬 Alle Serien")
-                    _uiState.update { it.copy(sidebarItems = defaultItems) }
+                    _uiState.update { it.copy(sidebarItems = BASE_SIDEBAR_ITEMS) }
                 }
         }
     }
@@ -281,6 +286,24 @@ class MainViewModel(
     }
 
     fun selectMode(mode: MainMode, genre: String = "") {
+        val cached = if (mode == MainMode.GENRE) genreCache[genre] else null
+        if (cached != null) {
+            loadJob?.cancel()
+            _uiState.update {
+                it.copy(
+                    mode = mode,
+                    currentGenre = genre,
+                    movies = cached.movies,
+                    continueWatchingItems = emptyList(),
+                    lastLoadedPage = cached.lastLoadedPage,
+                    isEndOfList = cached.isEndOfList,
+                    isLoading = false,
+                    errorMessage = null,
+                    canRetry = false
+                )
+            }
+            return
+        }
         _uiState.update {
             it.copy(
                 mode = mode,
@@ -289,10 +312,39 @@ class MainViewModel(
                 continueWatchingItems = emptyList(),
                 lastLoadedPage = 1,
                 isEndOfList = false,
-                errorMessage = null
+                errorMessage = null,
+                canRetry = false
             )
         }
         loadContentBottom(isReset = true, delayMillis = SELECTION_DEBOUNCE_MS)
+    }
+
+    fun retry() {
+        if (_uiState.value.sidebarItems.size <= BASE_SIDEBAR_ITEMS.size) loadSidebar()
+        loadContentBottom(isReset = true)
+    }
+
+    fun hideContinueWatching(item: ContinueWatchingItem) {
+        val previous = _uiState.value.continueWatchingItems
+        val remaining = previous.filterNot { it.id == item.id && it.source == item.source }
+        _uiState.update {
+            it.copy(
+                continueWatchingItems = remaining,
+                errorMessage = if (remaining.isEmpty() && it.mode == MainMode.CONTINUE_WATCHING) "Keine Inhalte vorhanden" else it.errorMessage
+            )
+        }
+        viewModelScope.launch {
+            repository.hideContinueWatching(item.id, item.source)
+                .onSuccess {
+                    _events.emit(MainEvent.ShowToast("„${item.title}“ aus Weiterschauen entfernt"))
+                }
+                .onFailure {
+                    if (_uiState.value.mode == MainMode.CONTINUE_WATCHING) {
+                        _uiState.update { it.copy(continueWatchingItems = previous, errorMessage = null) }
+                    }
+                    _events.emit(MainEvent.ShowToast("Eintrag konnte nicht entfernt werden"))
+                }
+        }
     }
 
     fun onSearchQueryChanged(query: String) {
@@ -329,7 +381,7 @@ class MainViewModel(
         loadJob?.cancel()
 
         loadJob = viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isLoading = true, errorMessage = null, canRetry = false) }
             if (delayMillis > 0) delay(delayMillis)
             val pageToLoad = if (isReset) 1 else _uiState.value.lastLoadedPage + 1
             val currentState = _uiState.value
@@ -410,6 +462,10 @@ class MainViewModel(
                 )
             }
         }
+        val updated = _uiState.value
+        if (updated.mode == MainMode.GENRE && updated.movies.isNotEmpty()) {
+            genreCache[updated.currentGenre] = GenreCache(updated.movies, updated.lastLoadedPage, updated.isEndOfList)
+        }
     }
 
     private fun handleMovieError(error: Throwable, pageToLoad: Int) {
@@ -422,8 +478,14 @@ class MainViewModel(
         _uiState.update {
             it.copy(
                 isLoading = false,
-                errorMessage = if (pageToLoad == 1) error.message ?: "Fehler beim Laden" else null
+                errorMessage = if (pageToLoad == 1) error.message ?: "Fehler beim Laden" else null,
+                canRetry = pageToLoad == 1
             )
+        }
+        if (pageToLoad > 1) {
+            viewModelScope.launch {
+                _events.emit(MainEvent.ShowToast("Weitere Inhalte konnten nicht geladen werden"))
+            }
         }
     }
 
@@ -454,6 +516,7 @@ class MainViewModel(
 
     companion object {
         private const val SELECTION_DEBOUNCE_MS = 200L
+        private val BASE_SIDEBAR_ITEMS = listOf("📺 Weiterschauen", "⭐ Meine Watchlist", "🎬 Alle Serien")
     }
 
     class Factory(

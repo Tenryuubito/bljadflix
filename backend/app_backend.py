@@ -253,6 +253,16 @@ def get_continue_watching(
     return content_service.get_continue_watching(user_id=user_id, source=source)
 
 
+@app.delete("/continue-watching/{content_id}")
+def hide_continue_watching(
+    content_id: int,
+    source: Optional[str] = Query("aniworld"),
+    user: dict = Depends(get_current_user)
+):
+    user_id = user["user_id"]
+    return content_service.hide_continue_watching(user_id=user_id, source=source, content_id=content_id)
+
+
 @app.post("/watchlist")
 def update_watchlist(
     req: WatchlistRequest,

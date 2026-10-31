@@ -17,6 +17,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -144,5 +145,14 @@ class SettingsViewModelTest {
             assertFalse(authManager.isLoggedIn())
             assertEquals(SettingsEvent.NavigateToLogin, navEvent)
         }
+    }
+
+    @Test
+    fun `toggleIntro flips the intro setting`() = runTest {
+        assertTrue(viewModel.uiState.value.isIntroEnabled)
+
+        viewModel.toggleIntro()
+
+        assertFalse(viewModel.uiState.value.isIntroEnabled)
     }
 }

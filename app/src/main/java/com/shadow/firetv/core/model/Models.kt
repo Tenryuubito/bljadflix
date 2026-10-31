@@ -37,7 +37,8 @@ data class Episode(
     val progress_seconds: Float = 0f,
     val duration_seconds: Float = 0f,
     val last_watched_at: Double = 0.0,
-    val episode_url: String? = null
+    val episode_url: String? = null,
+    val season_number: Int = 0
 )
 
 data class WatchlistRequest(

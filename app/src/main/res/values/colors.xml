@@ -5,6 +5,8 @@
     <color name="background_dark">#0A0A10</color>
     <color name="sidebar_bg">#12121B</color>
     <color name="card_bg_elevated">#222234</color>
+    <color name="button_secondary">#28283A</color>
+    <color name="skeleton">#26263A</color>
 
     <color name="text_primary">#FFFFFF</color>
     <color name="text_secondary">#B5B5CA</color>

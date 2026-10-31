@@ -17,6 +17,7 @@ import kotlin.math.roundToInt
 
 class ContinueWatchingAdapter(
     initialItems: List<ContinueWatchingItem> = emptyList(),
+    private val onItemOptions: (ContinueWatchingItem) -> Unit,
     private val onItemClick: (ContinueWatchingItem) -> Unit
 ) : RecyclerView.Adapter<ContinueWatchingAdapter.ViewHolder>() {
 
@@ -65,10 +66,23 @@ class ContinueWatchingAdapter(
             if (pos in differ.currentList.indices) onItemClick(differ.currentList[pos])
         }
 
+        view.setOnLongClickListener {
+            val pos = holder.bindingAdapterPosition
+            if (pos in differ.currentList.indices) onItemOptions(differ.currentList[pos])
+            true
+        }
+
         view.setOnKeyListener { _, keyCode, event ->
-            event.action == KeyEvent.ACTION_DOWN &&
-                keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
-                holder.bindingAdapterPosition == differ.currentList.size - 1
+            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+            when (keyCode) {
+                KeyEvent.KEYCODE_MENU -> {
+                    val pos = holder.bindingAdapterPosition
+                    if (pos in differ.currentList.indices) onItemOptions(differ.currentList[pos])
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_DOWN -> holder.bindingAdapterPosition == differ.currentList.size - 1
+                else -> false
+            }
         }
 
         return holder

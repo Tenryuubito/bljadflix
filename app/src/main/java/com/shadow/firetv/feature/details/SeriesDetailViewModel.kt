@@ -8,8 +8,12 @@ import com.shadow.firetv.core.data.MovieRepositoryImpl
 import com.shadow.firetv.core.model.Episode
 import com.shadow.firetv.core.model.WatchlistRequest
 import com.shadow.firetv.core.network.RetrofitClient
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -23,6 +27,7 @@ data class SeriesDetailUiState(
     val coverUrl: String? = null,
     val isWatchlisted: Boolean = false,
     val isLoading: Boolean = false,
+    val isReindexing: Boolean = false,
     val seasonsData: Map<String, List<Episode>> = emptyMap(),
     val seasonsList: List<String> = emptyList(),
     val selectedSeason: String = "",
@@ -32,12 +37,19 @@ data class SeriesDetailUiState(
     val errorMessage: String? = null
 )
 
+sealed interface SeriesDetailEvent {
+    data class ShowToast(val message: String) : SeriesDetailEvent
+}
+
 class SeriesDetailViewModel(
     private val repository: MovieRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SeriesDetailUiState())
     val uiState: StateFlow<SeriesDetailUiState> = _uiState.asStateFlow()
+
+    private val _events = MutableSharedFlow<SeriesDetailEvent>()
+    val events: SharedFlow<SeriesDetailEvent> = _events.asSharedFlow()
 
     fun initData(contentId: Int, title: String, description: String, genre: String?, coverUrl: String?, source: String? = null) {
         _uiState.update {
@@ -75,8 +87,12 @@ class SeriesDetailViewModel(
 
         viewModelScope.launch {
             repository.updateWatchlist(WatchlistRequest(contentId, targetState, currentState.source))
+                .onSuccess {
+                    _events.emit(SeriesDetailEvent.ShowToast(if (targetState) "Zur Watchlist hinzugefügt" else "Von der Watchlist entfernt"))
+                }
                 .onFailure {
                     _uiState.update { it.copy(isWatchlisted = !targetState) }
+                    _events.emit(SeriesDetailEvent.ShowToast("Watchlist konnte nicht gespeichert werden"))
                 }
         }
     }
@@ -114,10 +130,22 @@ class SeriesDetailViewModel(
             repository.reindexSeries(contentId, _uiState.value.source)
         } catch (_: Throwable) {
         }
-        repository.getEpisodes(contentId, _uiState.value.source)
-            .onSuccess { retryMap -> processLoadedEpisodes(retryMap) }
-            .onFailure { processLoadedEpisodes(fallbackMap) }
+        processLoadedEpisodes(awaitEpisodeChange(contentId, 0) ?: fallbackMap)
     }
+
+    private suspend fun awaitEpisodeChange(contentId: Int, previousCount: Int): Map<String, List<Episode>>? {
+        var latest: Map<String, List<Episode>>? = null
+        repeat(REINDEX_POLL_ATTEMPTS) { attempt ->
+            if (attempt > 0) delay(REINDEX_POLL_INTERVAL_MS)
+            repository.getEpisodes(contentId, _uiState.value.source).onSuccess { map ->
+                latest = map
+                if (episodeCount(map) != previousCount) return map
+            }
+        }
+        return latest
+    }
+
+    private fun episodeCount(seasonsMap: Map<String, List<Episode>>): Int = seasonsMap.values.sumOf { it.size }
 
     private fun processLoadedEpisodes(seasonsMap: Map<String, List<Episode>>, keepSelectedSeason: Boolean = false) {
         val seasonsList = seasonsMap.keys.sortedWith(Comparator { a, b ->
@@ -126,15 +154,15 @@ class SeriesDetailViewModel(
             if (numA != null && numB != null) numA.compareTo(numB)
             else a.compareTo(b)
         })
+        val (continueEp, continueSeason) = calculateContinueWatchingEpisode(seasonsList, seasonsMap)
+
         val previousSeason = _uiState.value.selectedSeason
-        val selectedSeason = if (keepSelectedSeason && previousSeason in seasonsList) {
-            previousSeason
-        } else {
-            seasonsList.firstOrNull() ?: ""
+        val selectedSeason = when {
+            keepSelectedSeason && previousSeason in seasonsList -> previousSeason
+            continueSeason in seasonsList -> continueSeason
+            else -> seasonsList.firstOrNull() ?: ""
         }
         val currentEpisodes = seasonsMap[selectedSeason] ?: emptyList()
-
-        val (continueEp, continueSeason) = calculateContinueWatchingEpisode(seasonsList, seasonsMap)
 
         _uiState.update {
             it.copy(
@@ -171,12 +199,28 @@ class SeriesDetailViewModel(
     }
 
     fun reindexSeries() {
-        val contentId = _uiState.value.contentId
-        if (contentId == -1) return
+        val state = _uiState.value
+        val contentId = state.contentId
+        if (contentId == -1 || state.isReindexing || state.isLoading) return
+        val previousCount = episodeCount(state.seasonsData)
+        _uiState.update { it.copy(isReindexing = true) }
         viewModelScope.launch {
-            repository.reindexSeries(contentId, _uiState.value.source)
-            repository.getEpisodes(contentId, _uiState.value.source)
-                .onSuccess { seasonsMap -> processLoadedEpisodes(seasonsMap) }
+            val started = repository.reindexSeries(contentId, state.source)
+            if (started.isFailure) {
+                _uiState.update { it.copy(isReindexing = false) }
+                _events.emit(SeriesDetailEvent.ShowToast(started.exceptionOrNull()?.message ?: "Aktualisierung fehlgeschlagen"))
+                return@launch
+            }
+            val updated = awaitEpisodeChange(contentId, previousCount)
+            if (updated != null && updated.isNotEmpty()) processLoadedEpisodes(updated, keepSelectedSeason = true)
+            _uiState.update { it.copy(isReindexing = false) }
+            val added = (updated?.let { episodeCount(it) } ?: previousCount) - previousCount
+            val message = when {
+                added == 1 -> "1 neue Folge gefunden"
+                added > 1 -> "$added neue Folgen gefunden"
+                else -> "Keine neuen Folgen gefunden"
+            }
+            _events.emit(SeriesDetailEvent.ShowToast(message))
         }
     }
 
@@ -207,6 +251,11 @@ class SeriesDetailViewModel(
         val season = seasonsList.find { seasonsMap[it]?.contains(targetEp) == true } ?: "?"
 
         return Pair(targetEp, season)
+    }
+
+    companion object {
+        private const val REINDEX_POLL_ATTEMPTS = 6
+        private const val REINDEX_POLL_INTERVAL_MS = 2500L
     }
 
     class Factory(private val repository: MovieRepository = MovieRepositoryImpl(RetrofitClient.instance)) :

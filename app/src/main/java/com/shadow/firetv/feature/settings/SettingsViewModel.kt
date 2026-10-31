@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 data class SettingsUiState(
     val selectedSource: StreamingSource = StreamingSource.ANIWORLD,
     val selectedTheme: AppTheme = AppTheme.SOVIET_RED,
+    val isIntroEnabled: Boolean = true,
     val username: String = "",
     val userId: Int = -1,
     val deviceId: String = "",
@@ -70,6 +71,7 @@ class SettingsViewModel(
             it.copy(
                 selectedSource = currentSource,
                 selectedTheme = currentTheme,
+                isIntroEnabled = themeManager.isIntroEnabled(),
                 username = session?.username ?: "Gast / Unbekannt",
                 userId = session?.userId ?: -1,
                 deviceId = session?.deviceId ?: authManager.getDeviceId(),
@@ -95,6 +97,12 @@ class SettingsViewModel(
             _events.emit(SettingsEvent.ThemeChanged(theme))
             _events.emit(SettingsEvent.ShowToast("Theme gewechselt: ${theme.displayName}"))
         }
+    }
+
+    fun toggleIntro() {
+        val enabled = !_uiState.value.isIntroEnabled
+        themeManager.setIntroEnabled(enabled)
+        _uiState.update { it.copy(isIntroEnabled = enabled) }
     }
 
     fun syncUserContent() {

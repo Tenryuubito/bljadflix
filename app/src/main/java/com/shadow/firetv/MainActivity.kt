@@ -11,6 +11,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.ProgressBar
@@ -27,6 +28,7 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.SimpleItemAnimator
+import com.shadow.firetv.core.model.ContinueWatchingItem
 import com.shadow.firetv.core.model.MainAppVersion
 import com.shadow.firetv.core.theme.ThemeManager
 import com.shadow.firetv.feature.auth.LoginActivity
@@ -43,16 +45,21 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rvContentGrid: RecyclerView
     private lateinit var progressMain: ProgressBar
     private lateinit var tvEmpty: TextView
+    private lateinit var layoutEmptyState: View
+    private lateinit var btnRetry: Button
+    private lateinit var tvContentHint: TextView
     private lateinit var etSearch: EditText
 
     private lateinit var gridAdapter: MovieAdapter
     private lateinit var continueWatchingAdapter: ContinueWatchingAdapter
+    private val skeletonAdapter = SkeletonAdapter(MovieAdapter.SPAN_COUNT * 3)
     private lateinit var sidebarAdapter: SidebarAdapter
     private lateinit var layoutManager: GridLayoutManager
 
     private var isSplashAnimDone = false
     private var isIntroAudioDone = false
     private var isInitialDataLoaded = false
+    private var isSplashHiding = false
     private var mediaPlayer: MediaPlayer? = null
     private lateinit var splashOverlay: View
     private lateinit var splashProgressBar: ProgressBar
@@ -62,6 +69,11 @@ class MainActivity : AppCompatActivity() {
     private val viewModel: MainViewModel by viewModels { MainViewModel.Factory() }
     private val updateViewModel: UpdateViewModel by viewModels { UpdateViewModel.Factory() }
     private var updateDialog: AlertDialog? = null
+    private var optionsDialog: AlertDialog? = null
+
+    private val scrollPositions = mutableMapOf<String, Int>()
+    private var renderedScrollKey: String? = null
+    private var pendingScrollRestore: Int? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,6 +84,10 @@ class MainActivity : AppCompatActivity() {
         rvContentGrid = findViewById(R.id.rv_content_grid)
         progressMain = findViewById(R.id.progress_main)
         tvEmpty = findViewById(R.id.tv_empty)
+        layoutEmptyState = findViewById(R.id.layout_empty_state)
+        btnRetry = findViewById(R.id.btn_retry)
+        tvContentHint = findViewById(R.id.tv_content_hint)
+        setupRetryButton()
         etSearch = findViewById(R.id.et_search)
         setupSettingsButton(findViewById(R.id.btn_settings))
 
@@ -104,31 +120,9 @@ class MainActivity : AppCompatActivity() {
             .setStartDelay(150)
             .start()
 
-        try {
-            mediaPlayer = MediaPlayer.create(this, R.raw.bljadflix_intro)
-            if (mediaPlayer != null) {
-                mediaPlayer?.setOnCompletionListener { mp ->
-                    mp.release()
-                    if (this.mediaPlayer === mp) {
-                        this.mediaPlayer = null
-                    }
-                    isIntroAudioDone = true
-                    checkSplashAndHide()
-                }
-                mediaPlayer?.setOnErrorListener { mp, _, _ ->
-                    mp.release()
-                    if (this.mediaPlayer === mp) {
-                        this.mediaPlayer = null
-                    }
-                    isIntroAudioDone = true
-                    checkSplashAndHide()
-                    true
-                }
-                mediaPlayer?.start()
-            } else {
-                isIntroAudioDone = true
-            }
-        } catch (_: Exception) {
+        if (ThemeManager.getInstance(this).isIntroEnabled()) {
+            playIntro()
+        } else {
             isIntroAudioDone = true
         }
 
@@ -181,20 +175,16 @@ class MainActivity : AppCompatActivity() {
             }
         )
 
-        continueWatchingAdapter = ContinueWatchingAdapter(emptyList()) { item ->
-            val intent = Intent(this, PlayerActivity::class.java).apply {
-                putExtra("EPISODE_ID", item.episode_id)
-                putExtra("CONTENT_ID", item.id)
-                putExtra("SOURCE", item.source)
-            }
-            startActivity(intent)
-            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
-        }
+        continueWatchingAdapter = ContinueWatchingAdapter(
+            onItemOptions = { item -> showContinueWatchingOptions(item) },
+            onItemClick = { item -> openPlayer(item) }
+        )
 
         layoutManager = GridLayoutManager(this, MovieAdapter.SPAN_COUNT)
         layoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
             override fun getSpanSize(position: Int): Int {
-                return if (gridAdapter.getItemViewType(position) == 1) MovieAdapter.SPAN_COUNT else 1
+                val adapter = rvContentGrid.adapter
+                return if (adapter === gridAdapter && gridAdapter.getItemViewType(position) == 1) MovieAdapter.SPAN_COUNT else 1
             }
         }
         rvContentGrid.layoutManager = layoutManager
@@ -206,6 +196,7 @@ class MainActivity : AppCompatActivity() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                 val mode = viewModel.uiState.value.mode
                 if (mode == MainMode.CONTINUE_WATCHING || mode == MainMode.WATCHLIST) return
+                if (rvContentGrid.adapter !== gridAdapter) return
 
                 val lastVisible = layoutManager.findLastVisibleItemPosition()
                 if (gridAdapter.itemCount > 0 && lastVisible >= gridAdapter.itemCount - MovieAdapter.SPAN_COUNT * 3) {
@@ -213,6 +204,58 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
+    }
+
+    private fun openPlayer(item: ContinueWatchingItem) {
+        val intent = Intent(this, PlayerActivity::class.java).apply {
+            putExtra("EPISODE_ID", item.episode_id)
+            putExtra("CONTENT_ID", item.id)
+            putExtra("SOURCE", item.source)
+            putExtra("TITLE", item.title)
+        }
+        startActivity(intent)
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+    }
+
+    private fun openSeries(item: ContinueWatchingItem) {
+        val intent = Intent(this, SeriesDetailActivity::class.java).apply {
+            putExtra("CONTENT_ID", item.id)
+            putExtra("TITLE", item.title)
+            putExtra("DESCRIPTION", item.description)
+            putExtra("GENRE", item.genre)
+            putExtra("COVER_URL", item.cover_url)
+            putExtra("SOURCE", item.source)
+        }
+        startActivity(intent)
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+    }
+
+    private fun showContinueWatchingOptions(item: ContinueWatchingItem) {
+        if (optionsDialog?.isShowing == true) return
+        val options = arrayOf(
+            getString(R.string.continue_option_play, item.season_number, item.episode_number),
+            getString(R.string.continue_option_series),
+            getString(R.string.continue_option_remove)
+        )
+        optionsDialog = AlertDialog.Builder(this)
+            .setTitle(item.title)
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> openPlayer(item)
+                    1 -> openSeries(item)
+                    2 -> viewModel.hideContinueWatching(item)
+                }
+            }
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .show()
+    }
+
+    private fun setupRetryButton() {
+        btnRetry.setOnClickListener { viewModel.retry() }
+        btnRetry.setOnFocusChangeListener { v, hasFocus ->
+            val scale = if (hasFocus) 1.05f else 1.0f
+            v.animate().scaleX(scale).scaleY(scale).setDuration(120).start()
+        }
     }
 
     private fun setupSettingsButton(button: ImageView) {
@@ -311,13 +354,29 @@ class MainActivity : AppCompatActivity() {
         sidebarAdapter.updateItems(state.sidebarItems)
         sidebarAdapter.selectItemQuietly(state.selectedSidebarIndex)
 
-        progressMain.visibility = if (state.isLoading && state.movies.isEmpty() && state.continueWatchingItems.isEmpty()) View.VISIBLE else View.GONE
+        val isContentEmpty = state.movies.isEmpty() && state.continueWatchingItems.isEmpty()
+        val showSkeleton = state.mode != MainMode.CONTINUE_WATCHING && state.isLoading && state.movies.isEmpty()
+        progressMain.visibility = if (state.mode == MainMode.CONTINUE_WATCHING && state.isLoading && isContentEmpty) View.VISIBLE else View.GONE
 
-        if (state.errorMessage != null && state.movies.isEmpty() && state.continueWatchingItems.isEmpty()) {
-            tvEmpty.visibility = View.VISIBLE
+        if (state.errorMessage != null && isContentEmpty) {
+            layoutEmptyState.visibility = View.VISIBLE
             tvEmpty.text = state.errorMessage
+            btnRetry.visibility = if (state.canRetry) View.VISIBLE else View.GONE
         } else {
-            tvEmpty.visibility = View.GONE
+            if (btnRetry.hasFocus()) rvSidebarCategories.requestFocus()
+            layoutEmptyState.visibility = View.GONE
+        }
+
+        tvContentHint.visibility = if (state.mode == MainMode.CONTINUE_WATCHING && state.continueWatchingItems.isNotEmpty()) View.VISIBLE else View.GONE
+
+        val scrollKey = if (state.mode == MainMode.GENRE) "${state.selectedSource.id}:${state.currentGenre}" else null
+        if (scrollKey != renderedScrollKey) {
+            val previousKey = renderedScrollKey
+            if (previousKey != null && rvContentGrid.adapter === gridAdapter) {
+                scrollPositions[previousKey] = layoutManager.findFirstVisibleItemPosition().coerceAtLeast(0)
+            }
+            renderedScrollKey = scrollKey
+            pendingScrollRestore = scrollKey?.let { scrollPositions[it] }?.takeIf { it > 0 }
         }
 
         if (state.mode == MainMode.CONTINUE_WATCHING) {
@@ -326,12 +385,24 @@ class MainActivity : AppCompatActivity() {
                 rvContentGrid.adapter = continueWatchingAdapter
             }
             continueWatchingAdapter.setItems(state.continueWatchingItems)
+        } else if (showSkeleton) {
+            if (rvContentGrid.adapter !== skeletonAdapter) {
+                rvContentGrid.layoutManager = layoutManager
+                rvContentGrid.adapter = skeletonAdapter
+            }
+            gridAdapter.setMovies(state.movies, state.isEndOfList)
         } else {
             if (rvContentGrid.adapter !== gridAdapter) {
                 rvContentGrid.layoutManager = layoutManager
                 rvContentGrid.adapter = gridAdapter
             }
-            gridAdapter.setMovies(state.movies, state.isEndOfList)
+            gridAdapter.setMovies(state.movies, state.isEndOfList) {
+                val target = pendingScrollRestore
+                if (target != null && target < state.movies.size) {
+                    pendingScrollRestore = null
+                    layoutManager.scrollToPositionWithOffset(target, 0)
+                }
+            }
         }
 
         splashProgressBar.progress = state.initProgressPercent
@@ -389,9 +460,58 @@ class MainActivity : AppCompatActivity() {
         finishAffinity()
     }
 
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (splashOverlay.visibility == View.VISIBLE && event.keyCode != KeyEvent.KEYCODE_BACK) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) skipIntro()
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    private fun playIntro() {
+        try {
+            val player = MediaPlayer.create(this, R.raw.bljadflix_intro)
+            if (player == null) {
+                isIntroAudioDone = true
+                return
+            }
+            mediaPlayer = player
+            player.setOnCompletionListener { mp -> onIntroFinished(mp) }
+            player.setOnErrorListener { mp, _, _ ->
+                onIntroFinished(mp)
+                true
+            }
+            player.start()
+        } catch (_: Exception) {
+            isIntroAudioDone = true
+        }
+    }
+
+    private fun onIntroFinished(mp: MediaPlayer) {
+        mp.release()
+        if (mediaPlayer === mp) {
+            mediaPlayer = null
+        }
+        isIntroAudioDone = true
+        checkSplashAndHide()
+    }
+
+    private fun skipIntro() {
+        try {
+            mediaPlayer?.stop()
+            mediaPlayer?.release()
+        } catch (_: Exception) {}
+        mediaPlayer = null
+        isIntroAudioDone = true
+        isSplashAnimDone = true
+        checkSplashAndHide()
+    }
+
     override fun onDestroy() {
         updateDialog?.dismiss()
         updateDialog = null
+        optionsDialog?.dismiss()
+        optionsDialog = null
         super.onDestroy()
         try {
             mediaPlayer?.release()
@@ -400,9 +520,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkSplashAndHide() {
-        if (!isSplashAnimDone || !isIntroAudioDone) return
+        if (!isSplashAnimDone || !isIntroAudioDone || isSplashHiding) return
 
         if (isInitialDataLoaded) {
+            isSplashHiding = true
             splashOverlay.animate()
                 .alpha(0f)
                 .setDuration(400)

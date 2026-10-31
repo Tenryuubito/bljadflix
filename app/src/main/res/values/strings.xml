@@ -19,8 +19,40 @@
     <string name="btn_logout">Abmelden</string>
     <string name="settings_logo_desc">Einstellungen Logo</string>
 
-    <string name="seek_forward_10">+10s</string>
-    <string name="seek_rewind_10">-10s</string>
+    <string name="btn_reindex">Folgen aktualisieren</string>
+    <string name="btn_reindex_running">Suche nach neuen Folgen…</string>
+    <string name="episode_remaining">Noch %1$d Min.</string>
+    <string name="episode_continue_badge">WEITER</string>
+
+    <string name="btn_retry">Erneut versuchen</string>
+    <string name="dialog_cancel">Abbrechen</string>
+    <string name="continue_watching_hint">Tipp: OK gedrückt halten oder ☰ drücken für weitere Optionen</string>
+    <string name="continue_option_play">▶ Weiterschauen (S%1$dE%2$d)</string>
+    <string name="continue_option_series">Zur Serie</string>
+    <string name="continue_option_remove">Aus „Weiterschauen“ entfernen</string>
+    <string name="splash_skip_hint">Beliebige Taste drücken, um das Intro zu überspringen</string>
+    <string name="settings_intro_on">Intro-Sound beim Start: An</string>
+    <string name="settings_intro_off">Intro-Sound beim Start: Aus</string>
+
+    <string name="seek_offset_forward">+%1$d s</string>
+    <string name="seek_offset_back">−%1$d s</string>
+    <string name="seek_indicator">%1$s · %2$s</string>
+    <string name="player_play_pause">Wiedergabe / Pause</string>
+    <string name="player_controls_hint">◀ ▶ Spulen (halten = schneller) · ▲ / ☰ Optionen</string>
+    <string name="player_episode_label">Staffel %1$d · Folge %2$d</string>
+    <string name="player_resumed">Fortgesetzt bei %1$s</string>
+    <string name="player_next_episode">Nächste Folge</string>
+    <string name="player_previous_episode">Vorherige Folge</string>
+    <string name="player_next_in">Nächste Folge in %1$d s</string>
+    <string name="player_next_hint">▼ Jetzt abspielen</string>
+    <string name="player_next_hint_countdown">OK: Jetzt abspielen · Zurück: Abbrechen</string>
+    <string name="player_error_title">Wiedergabe fehlgeschlagen</string>
+    <string name="player_options_title">Wiedergabe-Optionen</string>
+    <string name="player_retry">Erneut versuchen</string>
+    <string name="player_reload">Stream neu laden</string>
+    <string name="player_other_hoster">Anderen Hoster versuchen</string>
+    <string name="player_back_to_overview">Zurück</string>
+    <string name="player_continue_watching">Weiter ansehen</string>
 
     <string name="update_dialog_title">Update verfügbar</string>
     <string name="update_dialog_message">Bljadflix v%1$s ist verfügbar (installiert: v%2$s).</string>
