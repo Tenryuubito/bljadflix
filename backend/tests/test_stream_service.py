@@ -82,6 +82,24 @@ class TestStreamService(unittest.TestCase):
         self.assertIn("stream_url", result)
         self.assertEqual(result["stream_url"], "https://cdn.voe-network.net/engine/hls2/manifest.m3u8")
 
+        cached = self.stream_service.resolve_stream(episode_id=10, source="aniworld")
+
+        self.assertEqual(cached["stream_url"], result["stream_url"])
+        self.assertEqual(cached["headers"], result["headers"])
+        self.assertIn("Referer", cached["headers"])
+        self.assertEqual(mock_session.get.call_count, 3)
+
+    def test_cached_stream_without_known_headers_keeps_source_referer(self):
+        with self.db.get_content_connection("aniworld") as conn:
+            conn.execute("INSERT INTO video_links (episode_id, stream_url, expires_at) VALUES (10, 'https://voe.sx/e/abc', 9999999999)")
+            conn.commit()
+
+        result = self.stream_service.resolve_stream(episode_id=10, source="aniworld")
+
+        self.assertEqual(result["stream_url"], "https://voe.sx/e/abc")
+        self.assertEqual(result["headers"]["Referer"], "https://aniworld.to/anime/stream/test-show/staffel-1/episode-1")
+        self.assertEqual(result["headers"]["Origin"], "https://aniworld.to")
+
     @patch('requests.Session')
     def test_resolve_stream_filmo_open_mint(self, mock_session_cls):
         mock_session = MagicMock()

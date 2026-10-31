@@ -1,5 +1,6 @@
 import json
 import re
+import threading
 import time
 from typing import Optional
 from urllib.parse import urlparse, urljoin, unquote
@@ -15,10 +16,22 @@ COMMON_HEADERS = {
     "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7"
 }
 
+STREAM_CACHE_SECONDS = 7200
+
+
+def _source_headers(source_url: str) -> dict:
+    parsed = urlparse(source_url)
+    headers = dict(COMMON_HEADERS)
+    headers.update({"Origin": f"{parsed.scheme}://{parsed.netloc}", "Referer": source_url})
+    return headers
+
+
 class StreamService:
     def __init__(self, db: DatabaseManager, config: Config):
         self.db = db
         self.config = config
+        self._headers_cache: dict = {}
+        self._headers_lock = threading.Lock()
 
     def resolve_stream(self, episode_id: int, source: Optional[str] = "aniworld") -> dict:
         clean_source = self.db.sanitize_source(source)
@@ -37,13 +50,15 @@ class StreamService:
             current_time = time.time()
 
             if cached and cached["expires_at"] > current_time and cached["stream_url"] != source_url:
-                return {"stream_url": cached["stream_url"], "headers": COMMON_HEADERS}
+                with self._headers_lock:
+                    entry = self._headers_cache.get((clean_source, episode_id))
+                headers = entry[1] if entry and entry[0] == cached["stream_url"] else _source_headers(source_url)
+                return {"stream_url": cached["stream_url"], "headers": headers}
 
         parsed_url = urlparse(source_url)
         origin = f"{parsed_url.scheme}://{parsed_url.netloc}"
 
-        headers = dict(COMMON_HEADERS)
-        headers.update({"Origin": origin, "Referer": source_url})
+        headers = _source_headers(source_url)
 
         session = requests.Session()
         try:
@@ -173,8 +188,14 @@ class StreamService:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM video_links WHERE episode_id = ?", (episode_id,))
             cursor.execute("INSERT INTO video_links (episode_id, stream_url, expires_at) VALUES (?, ?, ?)",
-                           (episode_id, stream_url, current_time + 7200))
+                           (episode_id, stream_url, current_time + STREAM_CACHE_SECONDS))
             conn.commit()
+
+        with self._headers_lock:
+            self._headers_cache = {
+                key: entry for key, entry in self._headers_cache.items() if entry[2] > current_time
+            }
+            self._headers_cache[(clean_source, episode_id)] = (stream_url, dict(headers), current_time + STREAM_CACHE_SECONDS)
 
         return {"stream_url": stream_url, "headers": headers}
 
