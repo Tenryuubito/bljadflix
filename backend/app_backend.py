@@ -558,8 +558,6 @@ def trigger_index(
 @app.get("/app/version")
 def get_app_version():
     updates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "updates")
-    os.makedirs(updates_dir, exist_ok=True)
-    
     version_file = os.path.join(updates_dir, "version.json")
     if os.path.exists(version_file):
         try:
@@ -637,5 +635,5 @@ app.include_router(admin_router)
 
 
 if __name__ == "__main__":
-    uvicorn.run("app_backend:app", host="0.0.0.0", port=config.backend_port, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=config.backend_port)
 

@@ -27,7 +27,7 @@ class ContentService:
         offset = (page - 1) * limit
         with self.db.get_content_connection(clean_source, row_factory=True) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM content_index LIMIT ? OFFSET ?", (limit, offset))
+            cursor.execute("SELECT * FROM content_index ORDER BY id LIMIT ? OFFSET ?", (limit, offset))
             return self._with_source(cursor.fetchall(), clean_source)
 
     def get_genres(self, source: Optional[str] = "aniworld") -> List[str]:
@@ -50,9 +50,9 @@ class ContentService:
         with self.db.get_content_connection(clean_source, row_factory=True) as conn:
             cursor = conn.cursor()
             if not genre_name or genre_name.lower() in ("alle", "alle serien", "all"):
-                cursor.execute("SELECT * FROM content_index LIMIT ? OFFSET ?", (limit, offset))
+                cursor.execute("SELECT * FROM content_index ORDER BY id LIMIT ? OFFSET ?", (limit, offset))
             else:
-                cursor.execute("SELECT * FROM content_index WHERE genre LIKE ? LIMIT ? OFFSET ?", (f"%{genre_name}%", limit, offset))
+                cursor.execute("SELECT * FROM content_index WHERE genre LIKE ? ORDER BY id LIMIT ? OFFSET ?", (f"%{genre_name}%", limit, offset))
             return self._with_source(cursor.fetchall(), clean_source)
 
     def search_movies(self, source: Optional[str] = "aniworld", query: str = "", genre: str = "", page: int = 1, limit: int = 20) -> List[Dict]:
@@ -70,7 +70,7 @@ class ContentService:
                     if g.strip():
                         sql += " AND genre LIKE ?"
                         params.append(f"%{g.strip()}%")
-            sql += " LIMIT ? OFFSET ?"
+            sql += " ORDER BY id LIMIT ? OFFSET ?"
             params.extend([limit, offset])
             cursor.execute(sql, tuple(params))
             return self._with_source(cursor.fetchall(), clean_source)
