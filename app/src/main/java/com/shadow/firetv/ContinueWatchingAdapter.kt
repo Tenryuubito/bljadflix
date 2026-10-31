@@ -15,7 +15,7 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.DecodeFormat
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.request.RequestOptions
-import com.shadow.firetv.data.ContinueWatchingItem
+import com.shadow.firetv.core.model.ContinueWatchingItem
 import kotlin.math.roundToInt
 
 class ContinueWatchingAdapter(

@@ -2,7 +2,7 @@ import os
 import json
 import threading
 import uvicorn
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Depends, Query, Request
+from fastapi import APIRouter, FastAPI, HTTPException, BackgroundTasks, Header, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
 from pydantic import BaseModel
 from typing import Optional, List
@@ -17,6 +17,7 @@ from services.stream_service import StreamService
 from services.indexer_service import IndexerService
 from services.scheduler_service import SchedulerService
 from services.admin_service import AdminService
+from services.admin_auth_service import AdminAuthService, MAX_FAILED_ATTEMPTS
 from services.indexer_logger import indexer_logger
 from dashboard_view import get_dashboard_html
 
@@ -30,18 +31,21 @@ stream_service = StreamService(db, config)
 indexer_service = IndexerService(db, config)
 scheduler_service = SchedulerService(indexer_service, config)
 admin_service = AdminService(db)
+admin_auth_service = AdminAuthService(config)
 
 app = FastAPI(title="Fire TV Scraper Multi-Source Backend")
 
 
-@app.middleware("http")
-async def check_banned_devices_middleware(request: Request, call_next):
+def get_client_ip(request: Request) -> str:
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
-        client_ip = forwarded_for.split(",")[0].strip()
-    else:
-        client_ip = request.client.host if request.client else "127.0.0.1"
+        return forwarded_for.split(",")[0].strip()
+    return request.client.host if request.client else "127.0.0.1"
 
+
+@app.middleware("http")
+async def check_banned_devices_middleware(request: Request, call_next):
+    client_ip = get_client_ip(request)
     device_id = request.headers.get("X-Device-ID")
 
     if auth_service.is_banned(client_ip, device_id):
@@ -56,10 +60,8 @@ async def check_banned_devices_middleware(request: Request, call_next):
 
 @app.on_event("startup")
 def startup_check():
-    # Start background scheduler for periodic content updates
     scheduler_service.start()
 
-    # Initial check if default content source is empty
     movies = content_service.get_movies(source=config.default_source, page=1, limit=1)
     if not movies:
         print("Standard-Datenbank ist leer! Starte Erst-Indexierung im Hintergrund...")
@@ -85,15 +87,29 @@ def get_current_user(
     return auth_service.get_current_user(authorization, x_device_id)
 
 
-# Auth Endpoints
+def require_admin(x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token")):
+    if not admin_auth_service.is_configured():
+        raise HTTPException(status_code=503, detail="Admin-Zugang deaktiviert: admin_password in config.json setzen.")
+    if not admin_auth_service.verify_token(x_admin_token):
+        raise HTTPException(status_code=401, detail="Admin-Anmeldung erforderlich.")
+
+
+def require_admin_or_user(
+    x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token"),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_device_id: Optional[str] = Header(None, alias="X-Device-ID")
+):
+    if admin_auth_service.verify_token(x_admin_token):
+        return
+    auth_service.get_current_user(authorization, x_device_id)
+
+
+admin_router = APIRouter(dependencies=[Depends(require_admin)])
+
+
 @app.post("/auth/login", response_model=LoginResponse)
 def login(req: LoginRequest, request: Request):
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        client_ip = forwarded_for.split(",")[0].strip()
-    else:
-        client_ip = request.client.host if request.client else "127.0.0.1"
-
+    client_ip = get_client_ip(request)
     user_agent = request.headers.get("User-Agent", "")
     return auth_service.login(req, client_ip=client_ip, user_agent=user_agent)
 
@@ -117,35 +133,32 @@ def logout(user: dict = Depends(get_current_user)):
     return auth_service.logout(user["user_id"])
 
 
-# Admin User Management Endpoints
-@app.post("/admin/users", response_model=UserDto)
-def create_user(req: CreateUserRequest, user: dict = Depends(get_current_user)):
+@admin_router.post("/admin/users", response_model=UserDto)
+def create_user(req: CreateUserRequest):
     return auth_service.create_user(req)
 
 
-@app.get("/admin/users", response_model=List[UserDto])
-def list_users(user: dict = Depends(get_current_user)):
+@admin_router.get("/admin/users", response_model=List[UserDto])
+def list_users():
     return auth_service.list_users()
 
 
-@app.put("/admin/users/{user_id}")
-def update_user(user_id: int, req: UpdateUserRequest, user: dict = Depends(get_current_user)):
+@admin_router.put("/admin/users/{user_id}")
+def update_user(user_id: int, req: UpdateUserRequest):
     req.user_id = user_id
     return auth_service.update_user(req)
 
 
-@app.delete("/admin/users/{user_id}")
-def delete_user(user_id: int, user: dict = Depends(get_current_user)):
+@admin_router.delete("/admin/users/{user_id}")
+def delete_user(user_id: int):
     return auth_service.delete_user(user_id)
 
 
-# Sources Endpoint
 @app.get("/sources")
 def get_sources(user: dict = Depends(get_current_user)):
     return config.sources
 
 
-# Content Endpoints
 @app.get("/movies", response_model=List[MovieResponse])
 def get_movies(
     page: int = 1,
@@ -294,7 +307,6 @@ def sync_user_content(
     return indexer_service.sync_user_content(user_id=user_id, background_tasks=background_tasks, source=source)
 
 
-# Dashboard & Admin Web Routes
 @app.get("/", response_class=RedirectResponse)
 def root_redirect():
     return RedirectResponse(url="/dashboard")
@@ -306,7 +318,10 @@ def get_dashboard_page():
     return HTMLResponse(content=get_dashboard_html())
 
 
-# Admin Dashboard Request Models
+class AdminLoginRequest(BaseModel):
+    password: str
+
+
 class AdminUserActionRequest(BaseModel):
     user_id: int
 
@@ -327,23 +342,42 @@ class ManualBanRequest(BaseModel):
     reason: Optional[str] = "Manuelle Sperre durch Administrator"
 
 
-# Admin Dashboard API Endpoints
-@app.get("/admin/api/stats")
+@app.post("/admin/api/login")
+def admin_login(req: AdminLoginRequest, request: Request):
+    if not admin_auth_service.is_configured():
+        raise HTTPException(status_code=503, detail="Admin-Zugang deaktiviert: admin_password in config.json setzen.")
+    client_ip = get_client_ip(request)
+    if admin_auth_service.is_locked_out(client_ip):
+        raise HTTPException(status_code=429, detail="Zu viele Fehlversuche. Bitte in 15 Minuten erneut versuchen.")
+    if not admin_auth_service.check_password(req.password):
+        attempts = admin_auth_service.record_failure(client_ip)
+        raise HTTPException(status_code=401, detail=f"Falsches Admin-Passwort. Versuche: {attempts}/{MAX_FAILED_ATTEMPTS}")
+    admin_auth_service.clear_failures(client_ip)
+    return {"token": admin_auth_service.create_token()}
+
+
+@app.post("/admin/api/logout")
+def admin_logout(x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token")):
+    admin_auth_service.revoke_token(x_admin_token)
+    return {"status": "success"}
+
+
+@admin_router.get("/admin/api/stats")
 def get_admin_stats():
     return admin_service.get_dashboard_stats()
 
 
-@app.get("/admin/api/top-content")
+@admin_router.get("/admin/api/top-content")
 def get_admin_top_content(limit: int = 10):
     return admin_service.get_top_watched_content(limit=limit)
 
 
-@app.get("/admin/api/charts-data")
+@admin_router.get("/admin/api/charts-data")
 def get_admin_charts_data():
     return admin_service.get_activity_charts_data()
 
 
-@app.get("/admin/api/watch-logs")
+@admin_router.get("/admin/api/watch-logs")
 def get_admin_watch_logs(
     user_id: Optional[int] = Query(None),
     source: Optional[str] = Query(None),
@@ -360,17 +394,17 @@ def get_admin_watch_logs(
     )
 
 
-@app.get("/admin/api/users")
+@admin_router.get("/admin/api/users")
 def get_admin_users():
     return admin_service.get_users_list()
 
 
-@app.get("/admin/api/users/{user_id}/details")
+@admin_router.get("/admin/api/users/{user_id}/details")
 def get_admin_user_details(user_id: int):
     return admin_service.get_user_details(user_id)
 
 
-@app.get("/admin/api/users/{user_id}/watch-logs")
+@admin_router.get("/admin/api/users/{user_id}/watch-logs")
 def get_admin_user_watch_logs(
     user_id: int,
     source: Optional[str] = Query(None),
@@ -387,12 +421,12 @@ def get_admin_user_watch_logs(
     )
 
 
-@app.get("/admin/api/users/{user_id}/watchlist")
+@admin_router.get("/admin/api/users/{user_id}/watchlist")
 def get_admin_user_watchlist(user_id: int):
     return admin_service.get_user_watchlist_details(user_id)
 
 
-@app.get("/admin/api/users/{user_id}/searches")
+@admin_router.get("/admin/api/users/{user_id}/searches")
 def get_admin_user_searches(
     user_id: int,
     page: int = 1,
@@ -401,28 +435,27 @@ def get_admin_user_searches(
     return admin_service.get_user_search_history(user_id=user_id, page=page, limit=limit)
 
 
-@app.post("/admin/api/users/toggle-status")
+@admin_router.post("/admin/api/users/toggle-status")
 def toggle_user_status(req: AdminUserActionRequest):
     return admin_service.toggle_user_status(req.user_id)
 
 
-@app.post("/admin/api/users/reset-session")
+@admin_router.post("/admin/api/users/reset-session")
 def reset_user_session(req: AdminUserActionRequest):
     return admin_service.reset_user_session(req.user_id)
 
 
-# Banned Devices API Endpoints
-@app.get("/admin/api/banned-devices")
+@admin_router.get("/admin/api/banned-devices")
 def get_banned_devices():
     return auth_service.get_banned_devices()
 
 
-@app.post("/admin/api/banned-devices/unban")
+@admin_router.post("/admin/api/banned-devices/unban")
 def unban_device(req: UnbanDeviceRequest):
     return auth_service.unban_device(req.id)
 
 
-@app.post("/admin/api/banned-devices/ban")
+@admin_router.post("/admin/api/banned-devices/ban")
 def manual_ban_device(req: ManualBanRequest):
     return auth_service.ban_device_manually(
         ip_address=req.ip_address,
@@ -432,7 +465,7 @@ def manual_ban_device(req: ManualBanRequest):
     )
 
 
-@app.get("/admin/api/indexer/logs")
+@admin_router.get("/admin/api/indexer/logs")
 def get_indexer_logs(since_id: int = Query(0)):
     return {
         "is_indexing": indexer_service.is_indexing,
@@ -441,18 +474,18 @@ def get_indexer_logs(since_id: int = Query(0)):
     }
 
 
-@app.post("/admin/api/indexer/clear-logs")
+@admin_router.post("/admin/api/indexer/clear-logs")
 def clear_indexer_logs():
     indexer_logger.clear()
     return {"status": "success"}
 
 
-@app.get("/admin/api/db/tables")
+@admin_router.get("/admin/api/db/tables")
 def get_admin_db_tables(db_name: str = Query("users")):
     return admin_service.get_db_tables(db_name=db_name)
 
 
-@app.get("/admin/api/db/data")
+@admin_router.get("/admin/api/db/data")
 def get_admin_db_data(
     db_name: str = Query("users"),
     table_name: str = Query("users"),
@@ -469,18 +502,17 @@ def get_admin_db_data(
     )
 
 
-@app.post("/admin/api/db/query")
+@admin_router.post("/admin/api/db/query")
 def execute_admin_sql_query(req: AdminSqlQueryRequest):
     return admin_service.execute_sql_query(db_name=req.db_name, query=req.query)
 
 
-# Scheduler & Admin Trigger Endpoints
-@app.get("/admin/scheduler/status")
+@admin_router.get("/admin/scheduler/status")
 def get_scheduler_status():
     return scheduler_service.get_status()
 
 
-@app.post("/admin/scheduler/trigger")
+@admin_router.post("/admin/scheduler/trigger")
 def trigger_scheduler_now():
     return scheduler_service.trigger_now()
 
@@ -489,7 +521,8 @@ def trigger_scheduler_now():
 def trigger_index(
     background_tasks: BackgroundTasks,
     source: Optional[str] = Query("all"),
-    incremental: bool = Query(True)
+    incremental: bool = Query(True),
+    _: None = Depends(require_admin_or_user)
 ):
     def scrape_series_task(src: str, inc: bool):
         try:
@@ -501,10 +534,8 @@ def trigger_index(
     return {"status": "success", "source": source or "all", "incremental": incremental}
 
 
-# App Version & Distribution Endpoints
 @app.get("/app/version")
 def get_app_version():
-    """Returns information about the latest available versions of the Launcher and Main App."""
     updates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "updates")
     os.makedirs(updates_dir, exist_ok=True)
     
@@ -535,7 +566,6 @@ def get_app_version():
 
 @app.get("/app/download/main")
 def download_main_app():
-    """Downloads the latest APK of the Bljadflix Main App."""
     updates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "updates")
     apk_path = os.path.join(updates_dir, "bljadflix-main.apk")
     
@@ -555,9 +585,13 @@ def download_main_app():
     )
 
 
+@app.get("/install", response_class=RedirectResponse)
+def install_redirect():
+    return RedirectResponse(url="/app/download/launcher")
+
+
 @app.get("/app/download/launcher")
 def download_launcher_app():
-    """Downloads the latest APK of the Bljadflix Launcher/Installer."""
     updates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "updates")
     apk_path = os.path.join(updates_dir, "bljadflix-launcher.apk")
     
@@ -575,6 +609,9 @@ def download_launcher_app():
         media_type="application/vnd.android.package-archive",
         filename="bljadflix-launcher.apk"
     )
+
+
+app.include_router(admin_router)
 
 
 if __name__ == "__main__":

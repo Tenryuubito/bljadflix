@@ -2,9 +2,8 @@
 <resources>
     <string name="app_name">Bljadflix Installer</string>
     <string name="installer_title">Bljadflix System Setup &amp; Launcher</string>
-    <string name="installer_subtitle">Einrichtung, Login und Aktualisierung des Bljadflix Clients</string>
+    <string name="installer_subtitle">Einrichtung und Aktualisierung des Bljadflix Clients</string>
     <string name="status_checking">Prüfe Serververbindung...</string>
-    <string name="btn_login">Anmelden</string>
     <string name="btn_install_update">Haupt-App Installieren / Aktualisieren</string>
     <string name="btn_launch">Bljadflix Starten</string>
     <string name="btn_retry">Erneut versuchen</string>

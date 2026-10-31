@@ -10,7 +10,6 @@
         android:layout_height="match_parent"
         android:focusable="true" />
 
-    <!-- SEEK INDICATOR OVERLAY -->
     <TextView
         android:id="@+id/tv_seek_indicator"
         android:layout_width="wrap_content"

@@ -32,7 +32,6 @@ class AuthInterceptor(
         val response = chain.proceed(builder.build())
 
         if (response.code() == 401 || response.code() == 409) {
-            // Session invalidated or logged in on another device
             authManager.clearSession()
         }
 

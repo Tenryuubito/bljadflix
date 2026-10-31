@@ -1,6 +1,5 @@
 import concurrent.futures
 import re
-import sys
 from typing import Tuple, Optional
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup

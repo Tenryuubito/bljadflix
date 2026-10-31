@@ -24,7 +24,8 @@ data class ProgressRequest(
     val content_id: Int,
     val progress_seconds: Float,
     val duration_seconds: Float,
-    val is_completed: Boolean
+    val is_completed: Boolean,
+    val source: String? = null
 )
 
 data class Episode(
@@ -39,7 +40,8 @@ data class Episode(
 
 data class WatchlistRequest(
     val content_id: Int,
-    val is_watchlisted: Boolean
+    val is_watchlisted: Boolean,
+    val source: String? = null
 )
 
 data class WatchlistStatus(
@@ -57,10 +59,10 @@ data class ContinueWatchingItem(
     val episode_number: Int,
     val episode_title: String?,
     val progress_seconds: Float,
-    val duration_seconds: Float
+    val duration_seconds: Float,
+    val source: String? = null
 )
 
-// Auth Models
 data class LoginRequest(
     val username: String? = null,
     val password: String? = null,
@@ -87,20 +89,6 @@ data class AuthStatusResponse(
     val is_valid: Boolean,
     val active_device_id: String? = null,
     val message: String? = null
-)
-
-data class CreateUserRequest(
-    val username: String,
-    val login_code: String? = null
-)
-
-data class UserDto(
-    val id: Int,
-    val username: String,
-    val login_code: String,
-    val created_at: Double,
-    val is_active: Boolean,
-    val active_device_id: String? = null
 )
 
 data class TriggerIndexResponse(

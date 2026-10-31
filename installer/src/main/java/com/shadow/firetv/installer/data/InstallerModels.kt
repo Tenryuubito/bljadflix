@@ -19,16 +19,3 @@ data class MainAppVersion(
     val minLauncherVersionCode: Int,
     val changelog: String?
 )
-
-data class AuthRequest(
-    val username: String,
-    val password: String,
-    val device_id: String? = null
-)
-
-data class AuthResponse(
-    val access_token: String,
-    val token_type: String,
-    val username: String,
-    val is_admin: Boolean
-)

@@ -33,7 +33,6 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
 
-    // UI Controls & Seek Indicator
     private lateinit var controlsContainer: FrameLayout
     private lateinit var playPauseIcon: ImageView
     private lateinit var seekBar: ProgressBar
@@ -84,7 +83,7 @@ class PlayerActivity : AppCompatActivity() {
         val episodeId = intent.getIntExtra("EPISODE_ID", -1)
         val contentId = intent.getIntExtra("CONTENT_ID", -1)
 
-        viewModel.initPlayer(contentId, episodeId)
+        viewModel.initPlayer(contentId, episodeId, intent.getStringExtra("SOURCE"))
         observeViewModel()
     }
 

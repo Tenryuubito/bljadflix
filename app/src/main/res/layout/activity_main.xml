@@ -12,7 +12,6 @@
         android:background="@drawable/bg_radial_dark"
         android:orientation="horizontal">
 
-        <!-- LINKE SIDEBAR -->
         <LinearLayout
             android:layout_width="@dimen/sidebar_width"
             android:layout_height="match_parent"
@@ -67,7 +66,6 @@
                 android:imeOptions="actionSearch"
                 android:singleLine="true"/>
 
-            <!-- Module & Kategorien -->
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/rv_sidebar_categories"
                 android:layout_width="match_parent"
@@ -78,7 +76,6 @@
 
         </LinearLayout>
 
-        <!-- RECHTER INHALTSBEREICH (Grid) -->
         <FrameLayout
             android:layout_width="0dp"
             android:layout_height="match_parent"
@@ -115,7 +112,6 @@
         </FrameLayout>
     </LinearLayout>
 
-    <!-- SPLASH SCREEN OVERLAY -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/splash_screen_overlay"
         android:layout_width="match_parent"

@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 
 data class SeriesDetailUiState(
     val contentId: Int = -1,
+    val source: String? = null,
     val title: String = "",
     val description: String = "",
     val genre: String? = null,
@@ -38,10 +39,11 @@ class SeriesDetailViewModel(
     private val _uiState = MutableStateFlow(SeriesDetailUiState())
     val uiState: StateFlow<SeriesDetailUiState> = _uiState.asStateFlow()
 
-    fun initData(contentId: Int, title: String, description: String, genre: String?, coverUrl: String?) {
+    fun initData(contentId: Int, title: String, description: String, genre: String?, coverUrl: String?, source: String? = null) {
         _uiState.update {
             it.copy(
                 contentId = contentId,
+                source = source,
                 title = title,
                 description = description,
                 genre = genre,
@@ -56,7 +58,7 @@ class SeriesDetailViewModel(
 
     fun loadWatchlistStatus(contentId: Int) {
         viewModelScope.launch {
-            repository.getWatchlistStatus(contentId)
+            repository.getWatchlistStatus(contentId, _uiState.value.source)
                 .onSuccess { status ->
                     _uiState.update { it.copy(isWatchlisted = status.is_watchlisted) }
                 }
@@ -72,9 +74,8 @@ class SeriesDetailViewModel(
         _uiState.update { it.copy(isWatchlisted = targetState) }
 
         viewModelScope.launch {
-            repository.updateWatchlist(WatchlistRequest(contentId, targetState))
+            repository.updateWatchlist(WatchlistRequest(contentId, targetState, currentState.source))
                 .onFailure {
-                    // Revert state on failure
                     _uiState.update { it.copy(isWatchlisted = !targetState) }
                 }
         }
@@ -83,7 +84,7 @@ class SeriesDetailViewModel(
     fun loadEpisodes(contentId: Int, isRetry: Boolean = false) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            repository.getEpisodes(contentId)
+            repository.getEpisodes(contentId, _uiState.value.source)
                 .onSuccess { seasonsMap ->
                     if (seasonsMap.isEmpty() && !isRetry) {
                         reindexAndReloadEpisodes(contentId, seasonsMap)
@@ -99,10 +100,10 @@ class SeriesDetailViewModel(
 
     private suspend fun reindexAndReloadEpisodes(contentId: Int, fallbackMap: Map<String, List<Episode>>) {
         try {
-            repository.reindexSeries(contentId)
+            repository.reindexSeries(contentId, _uiState.value.source)
         } catch (_: Throwable) {
         }
-        repository.getEpisodes(contentId)
+        repository.getEpisodes(contentId, _uiState.value.source)
             .onSuccess { retryMap -> processLoadedEpisodes(retryMap) }
             .onFailure { processLoadedEpisodes(fallbackMap) }
     }
@@ -157,9 +158,8 @@ class SeriesDetailViewModel(
         val contentId = _uiState.value.contentId
         if (contentId == -1) return
         viewModelScope.launch {
-            // Reindexing runs asynchronously in the background without UI blocking/locking
-            repository.reindexSeries(contentId)
-            repository.getEpisodes(contentId)
+            repository.reindexSeries(contentId, _uiState.value.source)
+            repository.getEpisodes(contentId, _uiState.value.source)
                 .onSuccess { seasonsMap -> processLoadedEpisodes(seasonsMap) }
         }
     }

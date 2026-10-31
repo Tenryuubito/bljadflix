@@ -1,6 +1,5 @@
 import concurrent.futures
 import re
-import sys
 from typing import Tuple, Optional
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
@@ -11,7 +10,7 @@ from config import Config
 
 class StoIndexer(BaseIndexer):
     def __init__(self, db: DatabaseManager, config: Config):
-        source_url = config.sources.get("sto", {}).get("url", f"http://{config.streaming_source_ip}")
+        source_url = config.sources.get("sto", {}).get("url", "http://186.2.175.5")
         super().__init__("sto", source_url, db, config)
 
     def process_single_series(self, s_url: str) -> Tuple[str, bool, str]:

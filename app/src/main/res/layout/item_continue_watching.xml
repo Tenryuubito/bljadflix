@@ -11,7 +11,6 @@
     android:clipToPadding="false"
     android:background="@drawable/item_focus_selector">
 
-    <!-- Poster Frame -->
     <FrameLayout
         android:id="@+id/frame_poster"
         android:layout_width="120dp"
@@ -40,7 +39,6 @@
             android:elevation="4dp" />
     </FrameLayout>
 
-    <!-- Content Info -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="0dp"

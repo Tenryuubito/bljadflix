@@ -137,8 +137,9 @@ class SettingsViewModel(
     }
 
     fun logout() {
-        authManager.clearSession()
         viewModelScope.launch {
+            repository.logout()
+            authManager.clearSession()
             _events.emit(SettingsEvent.ShowToast("Erfolgreich abgemeldet"))
             _events.emit(SettingsEvent.NavigateToLogin)
         }

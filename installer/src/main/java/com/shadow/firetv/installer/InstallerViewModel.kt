@@ -6,7 +6,6 @@ import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shadow.firetv.installer.data.AppVersionInfo
-import com.shadow.firetv.installer.data.AuthRequest
 import com.shadow.firetv.installer.network.InstallerApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,8 +26,6 @@ data class InstallerUiState(
     val downloadProgress: Int = 0,
     val installedVersionCode: Int? = null,
     val serverVersionInfo: AppVersionInfo? = null,
-    val isAuthenticated: Boolean = false,
-    val showLogin: Boolean = false,
     val errorMessage: String? = null,
     val downloadedApkFile: File? = null,
     val readyToLaunch: Boolean = false,
@@ -125,45 +122,6 @@ class InstallerViewModel : ViewModel() {
             }
         } catch (e: PackageManager.NameNotFoundException) {
             null
-        }
-    }
-
-    fun loginAndProceed(usernameInput: String, passwordInput: String, baseUrl: String, context: Context) {
-        if (usernameInput.isBlank() || passwordInput.isBlank()) {
-            _uiState.update { it.copy(errorMessage = "Bitte Benutzernamen und Passwort eingeben") }
-            return
-        }
-
-        viewModelScope.launch {
-            _uiState.update { it.copy(isChecking = true, errorMessage = null, statusMessage = "Melde an...") }
-            try {
-                val api = getApi(baseUrl)
-                val resp = api.login(AuthRequest(usernameInput, passwordInput))
-                if (resp.isSuccessful && resp.body() != null) {
-                    _uiState.update {
-                        it.copy(
-                            isAuthenticated = true,
-                            showLogin = false,
-                            statusMessage = "Anmeldung erfolgreich!"
-                        )
-                    }
-                    checkStatusAndVersions(context, baseUrl)
-                } else {
-                    _uiState.update {
-                        it.copy(
-                            isChecking = false,
-                            errorMessage = "Anmeldung fehlgeschlagen: HTTP ${resp.code()}"
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isChecking = false,
-                        errorMessage = "Fehler bei Anmeldung: ${e.localizedMessage}"
-                    )
-                }
-            }
         }
     }
 

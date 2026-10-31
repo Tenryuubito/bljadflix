@@ -20,8 +20,7 @@ class InstallerActivity : AppCompatActivity() {
     private lateinit var binding: ActivityInstallerBinding
     private val viewModel: InstallerViewModel by viewModels()
 
-    // Default backend server address
-    private val backendBaseUrl: String = "http://192.168.2.103:8000"
+    private val backendBaseUrl: String = BuildConfig.BACKEND_URL.trimEnd('/')
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,12 +36,6 @@ class InstallerActivity : AppCompatActivity() {
     private fun setupListeners() {
         binding.btnRetry.setOnClickListener {
             viewModel.checkStatusAndVersions(this, backendBaseUrl)
-        }
-
-        binding.btnLogin.setOnClickListener {
-            val username = binding.etUsername.text.toString()
-            val password = binding.etPassword.text.toString()
-            viewModel.loginAndProceed(username, password, backendBaseUrl, this)
         }
 
         binding.btnPrimary.setOnClickListener {
@@ -67,12 +60,10 @@ class InstallerActivity : AppCompatActivity() {
                 viewModel.uiState.collect { state ->
                     binding.tvStatus.text = state.statusMessage
 
-                    // Version info display
                     val serverCode = state.serverVersionInfo?.mainApp?.versionName ?: "-"
                     val installedCode = if (state.installedVersionCode != null) "v${state.installedVersionCode}" else "Nicht installiert"
                     binding.tvVersionInfo.text = "Installiert: $installedCode | Verfügbar: v$serverCode"
 
-                    // Progress bar
                     if (state.isChecking || state.isDownloading) {
                         binding.progressBar.visibility = View.VISIBLE
                         binding.progressBar.isIndeterminate = state.isChecking
@@ -83,10 +74,6 @@ class InstallerActivity : AppCompatActivity() {
                         binding.progressBar.visibility = View.GONE
                     }
 
-                    // Login layout visibility
-                    binding.layoutLogin.visibility = if (state.showLogin) View.VISIBLE else View.GONE
-
-                    // Primary action button state & text
                     binding.btnPrimary.isEnabled = !state.isChecking && !state.isDownloading
 
                     val primaryText = when {
@@ -97,12 +84,10 @@ class InstallerActivity : AppCompatActivity() {
                     }
                     binding.btnPrimary.text = primaryText
 
-                    // Error message
                     state.errorMessage?.let { msg ->
                         Toast.makeText(this@InstallerActivity, msg, Toast.LENGTH_LONG).show()
                     }
 
-                    // Auto trigger install if downloaded file just arrived
                     if (state.downloadedApkFile != null && !state.isDownloading) {
                         triggerApkInstallation(state.downloadedApkFile)
                     }

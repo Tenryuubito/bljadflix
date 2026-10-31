@@ -159,6 +159,7 @@ class MainActivity : AppCompatActivity() {
                     putExtra("DESCRIPTION", movie.description)
                     putExtra("GENRE", movie.genre)
                     putExtra("COVER_URL", movie.cover_url)
+                    putExtra("SOURCE", movie.source)
                 }
                 startActivity(intent)
                 overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
@@ -181,6 +182,7 @@ class MainActivity : AppCompatActivity() {
             val intent = Intent(this, PlayerActivity::class.java).apply {
                 putExtra("EPISODE_ID", item.episode_id)
                 putExtra("CONTENT_ID", item.id)
+                putExtra("SOURCE", item.source)
             }
             startActivity(intent)
             overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)

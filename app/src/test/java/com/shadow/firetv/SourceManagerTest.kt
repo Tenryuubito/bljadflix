@@ -3,7 +3,6 @@ package com.shadow.firetv
 import com.shadow.firetv.core.source.SourceManager
 import com.shadow.firetv.core.source.StreamingSource
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
 

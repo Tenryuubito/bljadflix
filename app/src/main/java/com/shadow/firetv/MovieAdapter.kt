@@ -14,7 +14,7 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.DecodeFormat
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.request.RequestOptions
-import com.shadow.firetv.data.Movie
+import com.shadow.firetv.core.model.Movie
 
 class MovieAdapter(
     private val onMovieClick: (Movie) -> Unit,
@@ -59,33 +59,6 @@ class MovieAdapter(
             }
         }
     }
-
-    fun addMoviesToBottom(newMovies: List<Movie>, endOfList: Boolean) {
-        isEndOfList = endOfList
-        val current = differ.currentList.toMutableList()
-        current.addAll(newMovies)
-        differ.submitList(current)
-    }
-
-    fun addMoviesToTop(newMovies: List<Movie>) {
-        val current = newMovies + differ.currentList
-        differ.submitList(current)
-    }
-
-    fun removeMoviesFromTop(count: Int) {
-        val current = differ.currentList
-        if (count <= 0 || current.size <= count) return
-        differ.submitList(current.drop(count))
-    }
-
-    fun removeMoviesFromBottom(count: Int, endOfList: Boolean) {
-        isEndOfList = endOfList
-        val current = differ.currentList
-        if (count <= 0 || current.size <= count) return
-        differ.submitList(current.dropLast(count))
-    }
-
-    fun getMovies(): List<Movie> = differ.currentList
 
     override fun getItemViewType(position: Int): Int {
         return if (isEndOfList && position == differ.currentList.size) 1 else 0
@@ -150,7 +123,7 @@ class MovieAdapter(
                         val isLastRow = (pos / 5) == ((currentListSize - 1) / 5)
                         if (isLastRow) {
                             if (!isEndOfList) {
-                                return@setOnKeyListener true // Block down while loading
+                                return@setOnKeyListener true
                             } else {
                                 if (event.action == KeyEvent.ACTION_DOWN) {
                                     val rv = view.parent as? RecyclerView
@@ -175,7 +148,7 @@ class MovieAdapter(
         } else if (holder is FooterViewHolder) {
             holder.itemView.setOnKeyListener { view, keyCode, event ->
                 if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                    return@setOnKeyListener true // Trap focus at the bottom
+                    return@setOnKeyListener true
                 } else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && event.action == KeyEvent.ACTION_DOWN) {
                     if (onFocusLeft?.invoke(view) == true) {
                         return@setOnKeyListener true

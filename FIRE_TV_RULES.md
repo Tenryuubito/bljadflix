@@ -12,35 +12,32 @@ Dieses Dokument definiert die verbindlichen Architektur-Richtlinien, UX/UI-Regel
 - Aktiviere die **Explicit API Mode** Policy für Multi-Module-Projekte, um klare Modulgrenzen zu erzwingen.
 - **Verbot von Java-Code** in allen neuen Modulen.
 
-### 1.2 UI-Framework: Jetpack Compose for TV vs. Leanback
-- **Standard (2024+): Jetpack Compose for TV (`androidx.tv.material3`)**
-  - **Begründung:** Modernes deklaratives UI-Paradigma, nahtlose Zustandssynchronisation, flexible Animationen und deutlich höhere Entwicklungsgeschwindigkeit im Vergleich zum klassischen Leanback-XML-System.
-  - **Ausnahme / Legacy-Interop:** Verwende die Android Leanback Library (`androidx.leanback`) nur zur Integration oder Pflege historischer Codebasen. Für Neuprojekte gilt **Compose for TV** als verbindlicher Standard.
+### 1.2 UI-Framework: Android XML Views
+- **Standard in diesem Projekt:** Klassische Android Views (AppCompat, RecyclerView, ViewBinding) mit XML-Layouts.
+- Jetpack Compose for TV wird nur eingeführt, wenn eine Migration ausdrücklich gewünscht ist.
 
 ### 1.3 Architektur
-- **Clean Architecture + Unidirectional Data Flow (UDF) / MVVM / MVI**
-  - **UI-Layer:** Jetpack Compose for TV Composables (strikte Trennung zwischen Stateful Screens und Stateless UI-Komponenten).
-  - **Domain-Layer:** Business-Logik in reinen Kotlin `UseCases` / `Interactors` (völlig frei von Android Framework-Abhängigkeiten).
-  - **Data-Layer:** Repository Pattern mit lokalen Caches (Room) und Remote Data Sources (Ktor / Retrofit).
+- **MVVM + Unidirectional Data Flow**
+  - **UI-Layer:** Activities rendern einen einzigen `UiState` aus dem ViewModel und reagieren auf Einmal-Events.
+  - **Data-Layer:** `MovieRepository` (Retrofit + Gson) liefert `Result<T>`. Es gibt keinen lokalen Datenbank-Cache.
+  - **DI:** Kein Framework. Jedes ViewModel hat eine verschachtelte `Factory` mit echten Default-Abhängigkeiten, Tests übergeben Mocks direkt.
 
 ### 1.4 Asynchrone Programmierung
-- **Kotlin Coroutines & Flow** (`StateFlow`, `SharedFlow`).
-- Verwende strikte **Dispatcher-Injektion** (`CoroutineDispatcher` via DI / Hilt), um Thread-Wechsel sauber testbar zu machen.
+- **Kotlin Coroutines & Flow** (`StateFlow` für Zustand, `SharedFlow` für Events).
+- `CoroutineDispatcher` wird dort injiziert, wo I/O stattfindet (z. B. `MovieRepositoryImpl`), damit Tests ihn ersetzen können.
 
-### 1.5 Media Playback (Jetpack Media3)
-- Verwende **Jetpack Media3 (`androidx.media3:media3-exoplayer`)**.
-- Unterstützung für **HLS (`.m3u8`)** und **DASH (`.mpd`)**.
-- DRM-Integration via **Widevine Modular** (`MediaItem.DrmConfiguration`).
-- Nahtlose Audio-Focus-Behandlung und Passthrough für Surrounding-Audio (Dolby Atmos / Digital Plus).
+### 1.5 Media Playback
+- Wiedergabe über eine **WebView** (`PlayerActivity`), die die aufgelöste Hoster-URL lädt und `<video>` bzw. jwplayer per injiziertem JavaScript steuert.
+- Fortschritt wird periodisch an das Backend gemeldet, ab 90 % gilt eine Folge als gesehen.
 
 ---
 
 ## 2. FIRE TV & 10-FOOT-UI SPECIFIC RULES (UX/UI Best Practices)
 
 ### 2.1 Focus Management & D-Pad Navigation
-- **Regel 1 (Keine Touch-Annahmen):** Es gibt keinen Touchscreen! Jedes interaktive Element **MUSS** fokussierbar sein (`Modifier.focusable()` bzw. Compose TV Material3 Components wie `Button`, `Card`, `ListItem`).
-- **Regel 2 (Explizite Focus-Pfade):** Bei komplexen Verschachtelungen (z. B. vertikale Listen mit horizontalen Karussells) nutze `FocusRequester` und `focusProperties { left = ...; right = ... }`, um unvorhersehbares D-Pad-Springen zu verhindern.
-- **Regel 3 (Focus Restoring):** Wenn der Benutzer von einem Detail-Screen oder Suchmenü zurücknavigiert, **MUSS** der vorherige Fokus-Zustand exakt wiederhergestellt werden (z. B. via `FocusRestorer` oder ViewModel-State).
+- **Regel 1 (Keine Touch-Annahmen):** Es gibt keinen Touchscreen! Jedes interaktive Element **MUSS** fokussierbar sein (`android:focusable="true"` bzw. `isFocusable = true`).
+- **Regel 2 (Explizite Focus-Pfade):** Bei komplexen Verschachtelungen (z. B. Sidebar neben einem Grid) nutze `setOnKeyListener`, `nextFocus*`-Attribute und gezieltes `requestFocus()`, um unvorhersehbares D-Pad-Springen zu verhindern.
+- **Regel 3 (Focus Restoring):** Wenn der Benutzer von einem Detail-Screen oder Suchmenü zurücknavigiert, **MUSS** der vorherige Fokus-Zustand exakt wiederhergestellt werden (z. B. über die gespeicherte Auswahl im ViewModel-State).
 - **Regel 4 (D-Pad-Eingaben abfangen):** Verarbeite KeyEvents für D-Pad-Tasten (`KEYCODE_DPAD_UP`, `DOWN`, `LEFT`, `RIGHT`, `CENTER`) präzise. Die `KEYCODE_BACK`-Taste **MUSS** Dialoge, Overlays oder Player-Controls konsistent schließen, bevor sie die App verlässt.
 
 ### 2.2 Visual Feedback (Fokus-Indikation)
@@ -115,23 +112,22 @@ Entferne Touch- und Telefonie-Anforderungen und deklariere die TV-Hardware im `A
 Fire TV Sticks (besonders Lite und Standard-Varianten) verfügen über stark begrenzte Hardware-Ressourcen (oft nur 1 GB – 1.5 GB RAM und schwache Quad-Core ARM-CPUs).
 
 ### 4.1 Memory Management & Player Lifecycle
-- **Regel 1 (Player Release):** Gebe den ExoPlayer/Media3 Player in `onStop()` **sofort frei** (`player.release()`), um Hardware-Video-Decoder im System nicht zu blockieren.
-- **Regel 2 (Surface Management):** Stelle sicher, dass `PlayerView` oder `SurfaceView` beim Verlassen des Screens ordnungsgemäß abgemeldet werden.
+- **Regel 1 (Player freigeben):** Beim Verlassen des Players die WebView stoppen und zerstören (`stopLoading()`, `destroy()`), damit Hardware-Video-Decoder und Speicher freigegeben werden.
+- **Regel 2 (Polling beenden):** Laufende Fortschritts-Polls und Handler-Callbacks beim Verlassen des Screens abbrechen.
 
-### 4.2 Bild-Laden und Caching (Coil for TV)
-- **Regel 1 (Memory Cache Limit):** Konfiguriere Coil mit explizitem RAM-Limit (max. 20% des verfügbaren Heap):
+### 4.2 Bild-Laden und Caching (Glide)
+- **Regel 1 (Speicher sparen):** Poster und Thumbnails mit `DecodeFormat.PREFER_RGB_565` laden (50 % weniger Arbeitsspeicher als ARGB_8888):
   ```kotlin
-  val imageLoader = ImageLoader.Builder(context)
-      .memoryCache {
-          MemoryCache.Builder(context)
-              .maxSizePercent(0.20)
-              .build()
-      }
-      .bitmapConfig(Bitmap.Config.RGB_565) // 50% weniger Arbeitsspeicher als ARGB_8888 für Poster & Thumbnails!
-      .crossfade(true)
-      .build()
+  Glide.with(context)
+      .load(url)
+      .apply(
+          RequestOptions()
+              .format(DecodeFormat.PREFER_RGB_565)
+              .diskCacheStrategy(DiskCacheStrategy.ALL)
+      )
+      .into(imageView)
   ```
-- **Regel 2 (Downscaling):** Lade Grafiken **NIEMALS** in Originalauflösung (z. B. 4K-Backdrops), sondern skaliere sie beim Netzwerkanforderungs-Request auf die exakt benötigten Pixel-Dimensionen.
+- **Regel 2 (Downscaling):** Lade Grafiken **NIEMALS** in Originalauflösung (z. B. 4K-Backdrops), sondern skaliere sie auf die exakt benötigten Pixel-Dimensionen.
 
 ### 4.3 Startzeit-Optimierung (Cold Start)
 - **Regel 1 (Main Thread entlasten):** Keine synchronen I/O-Operations, Datenbankzugriffe oder schweren SDK-Initialisierungen auf dem Main-Thread.
@@ -145,20 +141,23 @@ Fire TV Sticks (besonders Lite und Standard-Varianten) verfügen über stark beg
 ## 5. CODING STANDARDS & QUALITY ASSURANCE RULES
 
 ### 5.1 Package-Struktur ("Package by Feature")
-Organisiere den Code modular nach Features, nicht nach technischen Layer-Ordnern auf Top-Ebene:
+Neuer Code wird nach Features organisiert, nicht nach technischen Layer-Ordnern auf Top-Ebene:
 
 ```text
 com.shadow.firetv/
 ├── core/
-│   ├── designsystem/     # Compose TV Themes, Custom TV Components, Colors
-│   ├── database/         # Room DB, DAOs
-│   ├── network/          # Ktor/Retrofit Client & ADM Push Logic
-│   └── player/           # Media3 ExoPlayer Wrapper
+│   ├── auth/             # AuthManager (Session, Device-ID)
+│   ├── data/             # MovieRepository + Implementierung
+│   ├── model/            # DTOs (snake_case passend zum Backend-JSON)
+│   ├── network/          # Retrofit-Client, MovieApi, AuthInterceptor
+│   ├── source/           # SourceManager (aktive Streaming-Quelle)
+│   └── theme/            # ThemeManager
 ├── feature/
-│   ├── home/             # Home Screen (Carousels, Hero Banner)
-│   ├── details/          # VOD Details Screen
-│   ├── player/           # Video Player UI & Overlay Controls
-│   └── search/           # D-Pad Keyboard Search Screen
+│   ├── auth/             # Login
+│   ├── details/          # Serien-Detailseite
+│   ├── main/             # Startseite (Sidebar, Grid, Suche)
+│   ├── player/           # WebView-Player
+│   └── settings/         # Einstellungen
 └── MainActivity.kt
 ```
 
@@ -167,19 +166,5 @@ com.shadow.firetv/
 - **Regel 2 (User-Friendly Error UI):** TV-Nutzer können keine URLs eintragen oder komplexe Formulare ausfüllen. Biete bei Netzwerkfehlern immer einen vorausgewählten D-Pad-Button an: `"Erneut versuchen"`.
 
 ### 5.3 Testing-Strategie
-- **Unit Tests:** Teste ViewModels, Repositories und UseCases mit JUnit 5, MockK und `Turbine` (für Flow-Testing).
-- **UI & D-Pad Tests:** Schreibe Compose UI-Tests mit synthetischen KeyEvents zur Überprüfung der Fokusführung:
-
-  ```kotlin
-  @Test
-  fun testDPadNavigationToNextItem() {
-      composeTestRule.onNodeWithTag("carousel_item_0").assertIsFocused()
-      
-      // Simuliere D-Pad Rechts-Taste
-      composeTestRule.onRoot().performKeyInput { 
-          pressKey(Key.DirectionRight) 
-      }
-      
-      composeTestRule.onNodeWithTag("carousel_item_1").assertIsFocused()
-  }
-  ```
+- **Unit Tests:** Teste ViewModels und Repositories mit JUnit 4, MockK und `Turbine` (für Flow-Testing). Der Main-Dispatcher wird über `MainDispatcherRule` ersetzt.
+- **D-Pad-Navigation:** Fokuspfade bei Änderungen an Adaptern oder Layouts manuell auf dem Gerät bzw. Emulator prüfen.

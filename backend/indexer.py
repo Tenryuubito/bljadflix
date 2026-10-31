@@ -1,6 +1,5 @@
 import argparse
 import os
-import sys
 from config import Config
 from database import DatabaseManager
 from services.indexer_service import IndexerService

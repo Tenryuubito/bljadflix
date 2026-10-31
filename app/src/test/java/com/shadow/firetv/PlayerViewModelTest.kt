@@ -61,7 +61,6 @@ class PlayerViewModelTest {
 
         viewModel.initPlayer(contentId = 1, episodeId = 10)
 
-        // 95% progress reached -> completed
         viewModel.updateProgressState(currentTime = 950f, duration = 1000f, isPaused = false, isEnded = false)
 
         viewModel.uiState.test {

@@ -2,7 +2,6 @@ package com.shadow.firetv.core.network
 
 import com.shadow.firetv.core.model.AuthStatusResponse
 import com.shadow.firetv.core.model.ContinueWatchingItem
-import com.shadow.firetv.core.model.CreateUserRequest
 import com.shadow.firetv.core.model.Episode
 import com.shadow.firetv.core.model.LoginRequest
 import com.shadow.firetv.core.model.LoginResponse
@@ -11,7 +10,6 @@ import com.shadow.firetv.core.model.ProgressRequest
 import com.shadow.firetv.core.model.StreamResponse
 import com.shadow.firetv.core.model.SyncStatusResponse
 import com.shadow.firetv.core.model.TriggerIndexResponse
-import com.shadow.firetv.core.model.UserDto
 import com.shadow.firetv.core.model.WatchlistRequest
 import com.shadow.firetv.core.model.WatchlistStatus
 import retrofit2.http.Body
@@ -23,9 +21,6 @@ import retrofit2.http.Query
 interface MovieApi {
     @POST("auth/login")
     suspend fun login(@Body request: LoginRequest): LoginResponse
-
-    @POST("users")
-    suspend fun createUser(@Body request: CreateUserRequest): UserDto
 
     @GET("auth/status")
     suspend fun checkAuthStatus(): AuthStatusResponse
@@ -93,13 +88,16 @@ interface MovieApi {
     ): List<Movie>
 
     @GET("watchlist/{content_id}")
-    suspend fun getWatchlistStatus(@Path("content_id") contentId: Int): WatchlistStatus
+    suspend fun getWatchlistStatus(
+        @Path("content_id") contentId: Int,
+        @Query("source") source: String? = null
+    ): WatchlistStatus
 
     @POST("watchlist")
     suspend fun updateWatchlist(@Body request: WatchlistRequest)
 
     @POST("sync-user-content")
-    suspend fun syncUserContent()
+    suspend fun syncUserContent(@Query("source") source: String? = null)
 
     @GET("sync-status")
     suspend fun getSyncStatus(): SyncStatusResponse
