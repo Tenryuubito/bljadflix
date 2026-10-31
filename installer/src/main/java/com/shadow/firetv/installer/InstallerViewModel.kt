@@ -49,6 +49,7 @@ data class InstallerUiState(
     val errorMessage: String? = null,
     val downloadedApkFile: File? = null,
     val downloadedFor: InstallerAction? = null,
+    val downloadedVersionCode: Int? = null,
     val pendingAction: InstallerAction? = null,
     val readyToLaunch: Boolean = false,
     val canInstallOrUpdate: Boolean = false
@@ -141,11 +142,13 @@ class InstallerViewModel : ViewModel() {
         val state = _uiState.value
         if (state.isChecking || state.isDownloading) return
         val action = state.pendingAction ?: return
-        state.downloadedApkFile?.takeIf { state.downloadedFor == action && it.exists() }?.let {
+        val info = state.serverVersionInfo ?: return
+        state.downloadedApkFile?.takeIf {
+            state.downloadedFor == action && state.downloadedVersionCode == targetVersionCode(action, info) && it.exists()
+        }?.let {
             _events.tryEmit(InstallerEvent.InstallApk(it))
             return
         }
-        val info = state.serverVersionInfo ?: return
         when (action) {
             InstallerAction.UPDATE_LAUNCHER -> downloadApk(
                 context,
@@ -165,6 +168,10 @@ class InstallerViewModel : ViewModel() {
             )
             InstallerAction.LAUNCH_MAIN_APP -> _events.tryEmit(InstallerEvent.LaunchMainApp)
         }
+    }
+
+    fun onInstallFailed(message: String) {
+        _uiState.update { it.copy(statusMessage = message, errorMessage = null) }
     }
 
     private fun getInstalledVersionCode(context: Context, packageName: String): Int? {
@@ -249,6 +256,7 @@ class InstallerViewModel : ViewModel() {
                         downloadProgress = 100,
                         downloadedApkFile = apkFile,
                         downloadedFor = action,
+                        downloadedVersionCode = it.serverVersionInfo?.let { info -> targetVersionCode(action, info) },
                         statusMessage = "Download abgeschlossen. Bitte Installation bestätigen."
                     )
                 }
@@ -279,6 +287,12 @@ class InstallerViewModel : ViewModel() {
             installedMainVersionCode == null || installedMainVersionCode < info.mainApp.versionCode ->
                 InstallerAction.INSTALL_MAIN_APP
             else -> InstallerAction.LAUNCH_MAIN_APP
+        }
+
+        fun targetVersionCode(action: InstallerAction, info: AppVersionInfo): Int? = when (action) {
+            InstallerAction.UPDATE_LAUNCHER -> info.launcher.versionCode
+            InstallerAction.INSTALL_MAIN_APP -> info.mainApp.versionCode
+            InstallerAction.LAUNCH_MAIN_APP -> null
         }
 
         fun resolveUrl(baseUrl: String, downloadUrl: String): String {

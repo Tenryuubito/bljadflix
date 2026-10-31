@@ -71,4 +71,12 @@ class InstallerViewModelTest {
             InstallerViewModel.resolveUrl("http://10.0.0.5:8000", "https://cdn.example/app.apk")
         )
     }
+
+    @Test
+    fun `target version code follows the pending action`() {
+        val info = versionInfo(7, 9)
+        assertEquals(7, InstallerViewModel.targetVersionCode(InstallerAction.UPDATE_LAUNCHER, info))
+        assertEquals(9, InstallerViewModel.targetVersionCode(InstallerAction.INSTALL_MAIN_APP, info))
+        assertNull(InstallerViewModel.targetVersionCode(InstallerAction.LAUNCH_MAIN_APP, info))
+    }
 }

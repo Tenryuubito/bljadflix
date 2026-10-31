@@ -3,6 +3,7 @@ package com.shadow.firetv.installer
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
 import android.widget.Toast
 import androidx.activity.viewModels
@@ -22,6 +23,7 @@ class InstallerActivity : AppCompatActivity() {
 
     private val backendBaseUrl: String = BuildConfig.BACKEND_URL.trimEnd('/')
     private var awaitingInstallResult = false
+    private var awaitingInstallPermission = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,18 +31,26 @@ class InstallerActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         awaitingInstallResult = savedInstanceState?.getBoolean(KEY_AWAITING_INSTALL) ?: false
+        awaitingInstallPermission = savedInstanceState?.getBoolean(KEY_AWAITING_PERMISSION) ?: false
 
         setupListeners()
         observeViewModel()
 
         if (savedInstanceState == null) {
             checkVersions(AutoMode.FULL)
+        } else if (!awaitingInstallResult && !awaitingInstallPermission && viewModel.uiState.value.serverVersionInfo == null) {
+            checkVersions(AutoMode.NONE)
         }
     }
 
     override fun onResume() {
         super.onResume()
-        if (awaitingInstallResult) {
+        if (awaitingInstallPermission) {
+            awaitingInstallPermission = false
+            if (packageManager.canRequestPackageInstalls()) {
+                viewModel.performPendingAction(this, backendBaseUrl)
+            }
+        } else if (awaitingInstallResult) {
             awaitingInstallResult = false
             checkVersions(AutoMode.LAUNCH_ONLY)
         }
@@ -49,6 +59,7 @@ class InstallerActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putBoolean(KEY_AWAITING_INSTALL, awaitingInstallResult)
+        outState.putBoolean(KEY_AWAITING_PERMISSION, awaitingInstallPermission)
     }
 
     private fun checkVersions(autoMode: AutoMode) {
@@ -102,7 +113,9 @@ class InstallerActivity : AppCompatActivity() {
         binding.btnPrimary.isEnabled = !busy && state.pendingAction != null
         binding.btnPrimary.text = when {
             state.pendingAction == null -> getString(R.string.btn_not_ready)
-            state.downloadedFor == state.pendingAction && state.downloadedApkFile != null -> getString(R.string.btn_install_now)
+            state.downloadedFor == state.pendingAction && state.downloadedApkFile != null &&
+                state.downloadedVersionCode == state.serverVersionInfo?.let { InstallerViewModel.targetVersionCode(state.pendingAction, it) } ->
+                getString(R.string.btn_install_now)
             state.pendingAction == InstallerAction.UPDATE_LAUNCHER -> getString(R.string.btn_update_launcher)
             state.pendingAction == InstallerAction.INSTALL_MAIN_APP -> getString(R.string.btn_install_update)
             else -> getString(R.string.btn_launch)
@@ -115,7 +128,8 @@ class InstallerActivity : AppCompatActivity() {
     }
 
     private fun launchMainApp() {
-        val launchIntent = packageManager.getLaunchIntentForPackage(MAIN_APP_PACKAGE)
+        val launchIntent = packageManager.getLeanbackLaunchIntentForPackage(MAIN_APP_PACKAGE)
+            ?: packageManager.getLaunchIntentForPackage(MAIN_APP_PACKAGE)
         if (launchIntent == null) {
             Toast.makeText(this, "Bljadflix Haupt-App ist nicht auf dem Gerät installiert!", Toast.LENGTH_LONG).show()
             return
@@ -128,6 +142,20 @@ class InstallerActivity : AppCompatActivity() {
     private fun triggerApkInstallation(apkFile: File) {
         if (!apkFile.exists()) {
             Toast.makeText(this, "APK-Datei nicht gefunden!", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val archiveInfo = packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
+        if (archiveInfo == null) {
+            apkFile.delete()
+            viewModel.onInstallFailed("Die heruntergeladene APK ist beschädigt. Bitte erneut versuchen.")
+            return
+        }
+
+        if (!packageManager.canRequestPackageInstalls()) {
+            awaitingInstallPermission = true
+            viewModel.onInstallFailed("Bitte „Apps unbekannter Herkunft“ für den Bljadflix Installer erlauben und danach zurückkehren.")
+            openUnknownSourcesSettings()
             return
         }
 
@@ -146,8 +174,24 @@ class InstallerActivity : AppCompatActivity() {
         }
     }
 
+    private fun openUnknownSourcesSettings() {
+        val candidates = listOf(
+            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")),
+            Intent(Settings.ACTION_SECURITY_SETTINGS),
+            Intent(Settings.ACTION_SETTINGS)
+        )
+        val intent = candidates.firstOrNull { it.resolveActivity(packageManager) != null }
+        if (intent == null) {
+            awaitingInstallPermission = false
+            Toast.makeText(this, "Einstellungen konnten nicht geöffnet werden.", Toast.LENGTH_LONG).show()
+            return
+        }
+        startActivity(intent)
+    }
+
     companion object {
         private const val MAIN_APP_PACKAGE = "com.shadow.firetv"
         private const val KEY_AWAITING_INSTALL = "awaiting_install_result"
+        private const val KEY_AWAITING_PERMISSION = "awaiting_install_permission"
     }
 }
