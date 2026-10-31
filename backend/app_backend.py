@@ -26,7 +26,7 @@ config = Config()
 db = DatabaseManager()
 db.init_db()
 
-auth_service = AuthService(db)
+auth_service = AuthService(db, config)
 content_service = ContentService(db)
 stream_service = StreamService(db, config)
 image_service = ImageService(db, config)
@@ -39,10 +39,11 @@ app = FastAPI(title="Fire TV Scraper Multi-Source Backend")
 
 
 def get_client_ip(request: Request) -> str:
+    client_host = request.client.host if request.client else "127.0.0.1"
     forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    return request.client.host if request.client else "127.0.0.1"
+    if forwarded_for and client_host in config.trusted_proxies:
+        return forwarded_for.split(",")[-1].strip()
+    return client_host
 
 
 @app.middleware("http")
@@ -54,7 +55,7 @@ async def check_banned_devices_middleware(request: Request, call_next):
         auth_service.record_banned_attempt(client_ip, device_id)
         return JSONResponse(
             status_code=403,
-            content={"detail": "Zugriff verweigert: Dieses Gerät/IP-Adresse ist dauerhaft gesperrt."}
+            content={"detail": "Zugriff verweigert: Dieses Gerät bzw. diese IP-Adresse ist gesperrt."}
         )
 
     return await call_next(request)

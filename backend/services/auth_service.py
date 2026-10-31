@@ -1,4 +1,5 @@
 import hmac
+import ipaddress
 import json
 import secrets
 import sqlite3
@@ -6,6 +7,7 @@ import time
 import urllib.request
 from typing import Optional, List, Dict
 from fastapi import HTTPException
+from config import Config
 from database import DatabaseManager
 from passwords import verify_password
 from models.auth import LoginRequest, CreateUserRequest, UpdateUserRequest
@@ -16,18 +18,13 @@ def resolve_ip_location(ip_address: Optional[str]) -> str:
         return "Unbekannter Standort"
 
     ip_clean = ip_address.strip()
-    if (
-        ip_clean in ["127.0.0.1", "::1", "localhost"]
-        or ip_clean.startswith("192.168.")
-        or ip_clean.startswith("10.")
-        or ip_clean.startswith("172.16.")
-        or ip_clean.startswith("172.17.")
-        or ip_clean.startswith("172.18.")
-        or ip_clean.startswith("172.19.")
-        or ip_clean.startswith("172.2")
-        or ip_clean.startswith("172.30.")
-        or ip_clean.startswith("172.31.")
-    ):
+    if ip_clean == "localhost":
+        return "Lokales Netzwerk (LAN / Loopback)"
+    try:
+        parsed = ipaddress.ip_address(ip_clean)
+    except ValueError:
+        return "Unbekannter Standort"
+    if parsed.is_private or parsed.is_loopback:
         return "Lokales Netzwerk (LAN / Loopback)"
 
     try:
@@ -46,56 +43,53 @@ def resolve_ip_location(ip_address: Optional[str]) -> str:
     return "Unbekannter Standort"
 
 
+AUTO_BAN_REASON = "3 fehlgeschlagene Anmeldeversuche"
+SESSION_ACTIVITY_INTERVAL_SECONDS = 60
+
+
 class AuthService:
-    def __init__(self, db: DatabaseManager):
+    def __init__(self, db: DatabaseManager, config: Optional[Config] = None):
         self.db = db
+        self.auto_ban_hours = config.auto_ban_hours if config else 24.0
+
+    def _active_ban_filter(self) -> tuple:
+        return "(reason != ? OR banned_at > ?)", [AUTO_BAN_REASON, time.time() - self.auto_ban_hours * 3600]
+
+    def _ban_match(self, ip_address: Optional[str], device_id: Optional[str]) -> tuple:
+        conditions = []
+        params = []
+        if device_id:
+            conditions.append("(device_id IS NOT NULL AND device_id = ?)")
+            params.append(device_id)
+        if ip_address:
+            conditions.append("ip_address = ?")
+            params.append(ip_address)
+        active_sql, active_params = self._active_ban_filter()
+        return f"({' OR '.join(conditions)}) AND {active_sql}", params + active_params
 
     def is_banned(self, ip_address: Optional[str], device_id: Optional[str]) -> bool:
         if not ip_address and not device_id:
             return False
 
+        where, params = self._ban_match(ip_address, device_id)
         with self.db.get_user_connection(row_factory=True) as conn:
             cursor = conn.cursor()
-            if device_id and ip_address:
-                cursor.execute(
-                    "SELECT id FROM banned_devices WHERE (device_id IS NOT NULL AND device_id = ?) OR ip_address = ?",
-                    (device_id, ip_address)
-                )
-            elif device_id:
-                cursor.execute(
-                    "SELECT id FROM banned_devices WHERE device_id IS NOT NULL AND device_id = ?",
-                    (device_id,)
-                )
-            else:
-                cursor.execute(
-                    "SELECT id FROM banned_devices WHERE ip_address = ?",
-                    (ip_address,)
-                )
+            cursor.execute(f"SELECT id FROM banned_devices WHERE {where} LIMIT 1", params)
             return cursor.fetchone() is not None
 
     def record_banned_attempt(self, ip_address: Optional[str], device_id: Optional[str]):
         if not ip_address and not device_id:
             return
 
+        where, params = self._ban_match(ip_address, device_id)
         with self.db.get_user_connection() as conn:
-            cursor = conn.cursor()
-            now = time.time()
-            if device_id and ip_address:
-                cursor.execute(
-                    "UPDATE banned_devices SET last_attempt_at = ? WHERE (device_id IS NOT NULL AND device_id = ?) OR ip_address = ?",
-                    (now, device_id, ip_address)
-                )
-            elif device_id:
-                cursor.execute(
-                    "UPDATE banned_devices SET last_attempt_at = ? WHERE device_id IS NOT NULL AND device_id = ?",
-                    (now, device_id)
-                )
-            else:
-                cursor.execute(
-                    "UPDATE banned_devices SET last_attempt_at = ? WHERE ip_address = ?",
-                    (now, ip_address)
-                )
+            conn.execute(f"UPDATE banned_devices SET last_attempt_at = ? WHERE {where}", [time.time()] + params)
             conn.commit()
+
+    def _ban_message(self) -> str:
+        hours = self.auto_ban_hours
+        duration = f"{int(hours)} Stunden" if hours == int(hours) else f"{hours} Stunden"
+        return f"{AUTO_BAN_REASON}. Dieses Gerät wurde für {duration} gesperrt."
 
     def record_failed_login(
         self,
@@ -131,7 +125,7 @@ class AuthService:
                     now,
                     new_attempts,
                     now,
-                    "3 fehlgeschlagene Anmeldeversuche"
+                    AUTO_BAN_REASON
                 ))
 
                 cursor.execute(
@@ -164,7 +158,8 @@ class AuthService:
     def get_banned_devices(self) -> List[Dict]:
         with self.db.get_user_connection(row_factory=True) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM banned_devices ORDER BY banned_at DESC")
+            active_sql, active_params = self._active_ban_filter()
+            cursor.execute(f"SELECT * FROM banned_devices WHERE {active_sql} ORDER BY banned_at DESC", active_params)
             return [dict(row) for row in cursor.fetchall()]
 
     def unban_device(self, banned_id: int) -> Dict:
@@ -209,7 +204,7 @@ class AuthService:
         with self.db.get_user_connection(row_factory=True) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT s.user_id, s.token, s.device_id, u.username, u.is_active
+                SELECT s.user_id, s.token, s.device_id, s.last_active_at, u.username, u.is_active
                 FROM user_sessions s
                 JOIN users u ON s.user_id = u.id
                 WHERE s.token = ?
@@ -219,17 +214,19 @@ class AuthService:
             if not session or not session["is_active"]:
                 return None
 
-            if x_device_id and session["device_id"] != x_device_id:
+            if session["device_id"] and session["device_id"] != x_device_id:
                 raise HTTPException(
                     status_code=409,
                     detail="Konto wird bereits auf einem anderen Gerät genutzt."
                 )
 
-            conn.execute(
-                "UPDATE user_sessions SET last_active_at = ? WHERE user_id = ?",
-                (time.time(), session["user_id"])
-            )
-            conn.commit()
+            now = time.time()
+            if now - (session["last_active_at"] or 0) >= SESSION_ACTIVITY_INTERVAL_SECONDS:
+                conn.execute(
+                    "UPDATE user_sessions SET last_active_at = ? WHERE user_id = ?",
+                    (now, session["user_id"])
+                )
+                conn.commit()
 
             return {
                 "user_id": session["user_id"],
@@ -251,7 +248,7 @@ class AuthService:
             self.record_banned_attempt(client_ip, req.device_id)
             raise HTTPException(
                 status_code=403,
-                detail="Gerät ist dauerhaft gesperrt. Zugriff verweigert."
+                detail="Gerät ist gesperrt. Zugriff verweigert."
             )
 
         username = req.username.strip() if req.username else None
@@ -282,16 +279,13 @@ class AuthService:
             else:
                 fail_info = self.record_failed_login(client_ip, req.device_id, req.device_name, user_agent)
                 if fail_info["banned"]:
-                    raise HTTPException(status_code=403, detail="3 fehlgeschlagene Anmeldeversuche. Dieses Gerät wurde dauerhaft gesperrt.")
+                    raise HTTPException(status_code=403, detail=self._ban_message())
                 raise HTTPException(status_code=400, detail=f"Benutzername und Passwort erforderlich. Versuche: {fail_info['attempts']}/3")
 
             if not user or not user["is_active"]:
                 fail_info = self.record_failed_login(client_ip, req.device_id, req.device_name, user_agent)
                 if fail_info["banned"]:
-                    raise HTTPException(
-                        status_code=403,
-                        detail="3 fehlgeschlagene Anmeldeversuche. Dieses Gerät wurde dauerhaft gesperrt."
-                    )
+                    raise HTTPException(status_code=403, detail=self._ban_message())
                 raise HTTPException(
                     status_code=400,
                     detail=f"Ungültige Anmeldedaten. Versuche: {fail_info['attempts']}/3. Verbleibende Versuche: {fail_info['remaining']}"
@@ -393,6 +387,8 @@ class AuthService:
             cursor.execute("DELETE FROM watch_progress WHERE user_id = ?", (user_id,))
             cursor.execute("DELETE FROM watchlist WHERE user_id = ?", (user_id,))
             cursor.execute("DELETE FROM watch_logs WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM hidden_continue_watching WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM search_logs WHERE user_id = ?", (user_id,))
             cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
             conn.commit()
             return {"status": "success", "message": f"Benutzer '{user['username']}' gelöscht"}

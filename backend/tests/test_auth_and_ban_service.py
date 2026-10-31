@@ -1,7 +1,9 @@
 import os
 import sys
 import unittest
+import time
 import uuid
+from unittest.mock import patch
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
@@ -58,7 +60,27 @@ class TestAuthAndBanService(unittest.TestCase):
         with self.assertRaises(HTTPException) as ctx4:
             self.auth_service.login(req, client_ip="192.168.1.100")
         self.assertEqual(ctx4.exception.status_code, 403)
-        self.assertIn("dauerhaft gesperrt", ctx4.exception.detail)
+        self.assertIn("gesperrt", ctx4.exception.detail)
+
+    def test_automatic_ban_expires(self):
+        req = LoginRequest(username="WrongUser", password="WrongPassword", device_id="test_device_expire")
+        with patch("services.auth_service.time.time", return_value=1000.0):
+            for _ in range(3):
+                with self.assertRaises(HTTPException):
+                    self.auth_service.login(req, client_ip="192.168.1.110")
+        hours = self.auth_service.auto_ban_hours
+
+        with patch("services.auth_service.time.time", return_value=1000.0 + hours * 3600 - 1):
+            self.assertTrue(self.auth_service.is_banned("192.168.1.110", "test_device_expire"))
+        with patch("services.auth_service.time.time", return_value=1000.0 + hours * 3600 + 1):
+            self.assertFalse(self.auth_service.is_banned("192.168.1.110", "test_device_expire"))
+            self.assertEqual(self.auth_service.get_banned_devices(), [])
+
+    def test_manual_ban_does_not_expire(self):
+        self.auth_service.ban_device_manually(ip_address="10.0.0.60", device_id="test_device_60")
+
+        with patch("services.auth_service.time.time", return_value=time.time() + 365 * 24 * 3600):
+            self.assertTrue(self.auth_service.is_banned("10.0.0.60", "test_device_60"))
 
     def test_unban_device(self):
         self.auth_service.ban_device_manually(
@@ -85,12 +107,39 @@ class TestAuthAndBanService(unittest.TestCase):
             reason="3 fehlgeschlagene Anmeldeversuche"
         )
 
-        resp = self.client.get(
-            "/movies",
-            headers={"X-Forwarded-For": "203.0.113.199", "X-Device-ID": "device_999"}
-        )
+        resp = self.client.get("/movies", headers={"X-Device-ID": "device_999"})
         self.assertEqual(resp.status_code, 403)
-        self.assertIn("dauerhaft gesperrt", resp.json()["detail"])
+        self.assertIn("gesperrt", resp.json()["detail"])
+
+    def test_forwarded_for_header_is_ignored_without_trusted_proxy(self):
+        self.auth_service.ban_device_manually(ip_address="testclient", device_name="Testclient")
+
+        resp = self.client.get("/movies", headers={"X-Forwarded-For": "198.51.100.7"})
+
+        self.assertEqual(resp.status_code, 403)
+
+    def test_forwarded_for_header_is_used_behind_trusted_proxy(self):
+        self.auth_service.ban_device_manually(ip_address="198.51.100.8", device_name="Hinter Proxy")
+
+        with patch.dict(app_backend.config.data, {"trusted_proxies": ["testclient"]}):
+            blocked = self.client.get("/movies", headers={"X-Forwarded-For": "1.2.3.4, 198.51.100.8"})
+            allowed = self.client.get("/movies", headers={"X-Forwarded-For": "198.51.100.8, 1.2.3.4"})
+
+        self.assertEqual(blocked.status_code, 403)
+        self.assertEqual(allowed.status_code, 401)
+
+    def test_session_requires_matching_device_id(self):
+        code = f"{uuid.uuid4().int % 900000 + 100000}"
+        user = self._create_user(code)
+        login = self.auth_service.login(
+            LoginRequest(username=user["username"], password=code, device_id="device_session_check"),
+            client_ip="192.168.1.160"
+        )
+        auth = {"Authorization": f"Bearer {login['token']}"}
+
+        self.assertEqual(self.client.get("/sources", headers={**auth, "X-Device-ID": "device_session_check"}).status_code, 200)
+        self.assertEqual(self.client.get("/sources", headers=auth).status_code, 409)
+        self.assertEqual(self.client.get("/sources", headers={**auth, "X-Device-ID": "fremd"}).status_code, 409)
 
     def _create_user(self, login_code: str) -> dict:
         user = self.auth_service.create_user(CreateUserRequest(username=f"user_{uuid.uuid4().hex[:8]}", login_code=login_code))

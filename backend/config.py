@@ -70,3 +70,12 @@ class Config:
     @property
     def indexer_interval_hours(self) -> int:
         return int(self.data.get("indexer_interval_hours", 12))
+
+    @property
+    def trusted_proxies(self) -> list:
+        proxies = self.data.get("trusted_proxies", [])
+        return [str(p).strip() for p in proxies] if isinstance(proxies, list) else []
+
+    @property
+    def auto_ban_hours(self) -> float:
+        return float(self.data.get("auto_ban_hours", 24))
