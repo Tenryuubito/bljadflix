@@ -152,7 +152,7 @@ class MainViewModel(
             }
             MainMode.WATCHLIST -> {
                 repository.getWatchlist(1)
-                    .onSuccess { res -> handleMovieResult(res, 1, isWatchlist = true) }
+                    .onSuccess { res -> handleMovieResult(res, 1) }
                     .onFailure { error -> handleMovieError(error, 1) }
             }
             MainMode.GENRE -> {
@@ -426,7 +426,7 @@ class MainViewModel(
                 MainMode.WATCHLIST -> {
                     repository.getWatchlist(pageToLoad)
                         .onSuccess { res ->
-                            handleMovieResult(res, pageToLoad, isWatchlist = true)
+                            handleMovieResult(res, pageToLoad)
                         }
                         .onFailure { handleMovieError(it, pageToLoad) }
                 }
@@ -448,8 +448,8 @@ class MainViewModel(
         }
     }
 
-    private fun handleMovieResult(res: List<Movie>, pageToLoad: Int, isWatchlist: Boolean = false) {
-        val isEndOfList = isWatchlist || res.size < 20
+    private fun handleMovieResult(res: List<Movie>, pageToLoad: Int) {
+        val isEndOfList = res.size < 20
         _uiState.update { currentState ->
             if (res.isNotEmpty()) {
                 if (pageToLoad == 1) {
@@ -461,9 +461,9 @@ class MainViewModel(
                         errorMessage = null
                     )
                 } else {
-                    val knownIds = currentState.movies.mapTo(HashSet()) { it.id }
+                    val knownKeys = currentState.movies.mapTo(HashSet()) { it.id to it.source }
                     currentState.copy(
-                        movies = currentState.movies + res.filter { it.id !in knownIds },
+                        movies = currentState.movies + res.filter { (it.id to it.source) !in knownKeys },
                         lastLoadedPage = pageToLoad,
                         isEndOfList = isEndOfList,
                         isLoading = false,

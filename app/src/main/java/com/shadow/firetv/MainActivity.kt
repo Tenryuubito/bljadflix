@@ -209,7 +209,7 @@ class MainActivity : AppCompatActivity() {
         rvContentGrid.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                 val mode = viewModel.uiState.value.mode
-                if (mode == MainMode.CONTINUE_WATCHING || mode == MainMode.WATCHLIST) return
+                if (mode == MainMode.CONTINUE_WATCHING) return
                 if (rvContentGrid.adapter !== gridAdapter) return
 
                 val lastVisible = layoutManager.findLastVisibleItemPosition()

@@ -166,6 +166,27 @@ class MainViewModelTest {
     }
 
     @Test
+    fun `watchlist loads further pages and keeps equal ids from other sources`() = runTest {
+        val firstPage = (1..20).map { Movie(it, "Serie $it", "", "", "", source = "sto") }
+        val secondPage = listOf(Movie(1, "Andere Serie", "", "", "", source = "aniworld"))
+        coEvery { repository.getWatchlist(1, any()) } returns Result.success(firstPage)
+        coEvery { repository.getWatchlist(2, any()) } returns Result.success(secondPage)
+
+        advanceUntilIdle()
+        viewModel.selectSidebarIndex(1)
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isEndOfList)
+
+        viewModel.loadContentBottom()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(21, state.movies.size)
+        assertEquals("aniworld", state.movies.last().source)
+        assertTrue(state.isEndOfList)
+    }
+
+    @Test
     fun `search query updates search mode and returns matching movies`() = runTest {
         val searchResults = listOf(Movie(5, "Spider-Man", "Desc", "url", "pageUrl", "Action"))
         coEvery { repository.searchMovies("Spider", null, 1, 20) } returns Result.success(searchResults)

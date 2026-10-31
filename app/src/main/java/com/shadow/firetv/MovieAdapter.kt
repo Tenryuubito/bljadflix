@@ -23,7 +23,8 @@ class MovieAdapter(
     private val focusInterpolator = FastOutSlowInInterpolator()
 
     private val diffCallback = object : DiffUtil.ItemCallback<Movie>() {
-        override fun areItemsTheSame(oldItem: Movie, newItem: Movie): Boolean = oldItem.id == newItem.id
+        override fun areItemsTheSame(oldItem: Movie, newItem: Movie): Boolean =
+            oldItem.id == newItem.id && oldItem.source == newItem.source
         override fun areContentsTheSame(oldItem: Movie, newItem: Movie): Boolean = oldItem == newItem
     }
 
