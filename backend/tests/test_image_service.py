@@ -87,6 +87,15 @@ class TestImageService(unittest.TestCase):
             self.assertEqual(img.format, "JPEG")
             self.assertEqual(img.width, COVER_MAX_WIDTH)
 
+    @patch("services.image_service.requests.get")
+    def test_failed_download_is_not_retried_immediately(self, mock_get):
+        mock_get.return_value = fake_response(b"", status=404)
+
+        self.assertIsNone(self.service.get_cover_path("aniworld", 1))
+        self.assertIsNone(self.service.get_cover_path("aniworld", 1))
+
+        self.assertEqual(mock_get.call_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
