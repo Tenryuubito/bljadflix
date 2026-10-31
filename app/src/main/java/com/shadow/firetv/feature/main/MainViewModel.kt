@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.shadow.firetv.core.auth.AuthManager
 import com.shadow.firetv.core.data.MovieRepository
 import com.shadow.firetv.core.data.MovieRepositoryImpl
+import com.shadow.firetv.core.data.ProgressSync
 import com.shadow.firetv.core.model.ContinueWatchingItem
 import com.shadow.firetv.core.model.Movie
 import com.shadow.firetv.core.network.RetrofitClient
@@ -62,7 +63,8 @@ sealed interface MainEvent {
 class MainViewModel(
     private val repository: MovieRepository,
     private val authManager: AuthManager = AuthManager.getInstance(),
-    private val sourceManager: SourceManager = SourceManager.getInstance()
+    private val sourceManager: SourceManager = SourceManager.getInstance(),
+    private val progressSync: ProgressSync = ProgressSync.shared
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MainUiState(selectedSource = sourceManager.getSelectedSource()))
@@ -317,6 +319,25 @@ class MainViewModel(
             )
         }
         loadContentBottom(isReset = true, delayMillis = SELECTION_DEBOUNCE_MS)
+    }
+
+    fun refreshContinueWatching() {
+        val state = _uiState.value
+        if (state.mode != MainMode.CONTINUE_WATCHING || state.isLoading || state.isInitializing) return
+        viewModelScope.launch {
+            progressSync.awaitPending()
+            repository.getContinueWatching().onSuccess { res ->
+                val current = _uiState.value
+                if (current.mode != MainMode.CONTINUE_WATCHING || current.isLoading) return@onSuccess
+                _uiState.update {
+                    it.copy(
+                        continueWatchingItems = res,
+                        errorMessage = if (res.isEmpty()) "Keine Inhalte vorhanden" else null,
+                        canRetry = false
+                    )
+                }
+            }
+        }
     }
 
     fun retry() {

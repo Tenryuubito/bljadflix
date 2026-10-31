@@ -138,7 +138,7 @@ class ContentService:
                 ON CONFLICT(user_id, source, episode_id) DO UPDATE SET
                     progress_seconds = excluded.progress_seconds,
                     duration_seconds = excluded.duration_seconds,
-                    is_completed = excluded.is_completed,
+                    is_completed = MAX(watch_progress.is_completed, excluded.is_completed),
                     last_watched_at = excluded.last_watched_at
             ''', (user_id, clean_source, req.episode_id, req.content_id, req.progress_seconds, req.duration_seconds, req.is_completed, current_time))
 

@@ -2,6 +2,7 @@ package com.shadow.firetv
 
 import app.cash.turbine.test
 import com.shadow.firetv.core.data.MovieRepository
+import com.shadow.firetv.core.data.ProgressSync
 import com.shadow.firetv.core.model.Episode
 import com.shadow.firetv.core.model.TriggerIndexResponse
 import com.shadow.firetv.core.model.WatchlistRequest
@@ -12,6 +13,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -81,6 +83,23 @@ class SeriesDetailViewModelTest {
         assertEquals("2", state.selectedSeason)
         assertEquals(300f, state.currentEpisodes.first().progress_seconds)
         assertEquals(201, state.continueEpisode?.id)
+    }
+
+    @Test
+    fun `refreshEpisodes waits for pending progress before reloading`() = runTest {
+        val episodesMap = mapOf("1" to listOf(Episode(101, 1, "Pilot", "http://ep1")))
+        coEvery { repository.getWatchlistStatus(1) } returns Result.success(WatchlistStatus(is_watchlisted = false))
+        coEvery { repository.getEpisodes(1) } returns Result.success(episodesMap)
+        val progressSync = ProgressSync(this)
+        viewModel = SeriesDetailViewModel(repository, progressSync)
+
+        viewModel.initData(1, "Test Series", "Desc", "Genre", "coverUrl")
+        progressSync.launch { delay(1_000) }
+        viewModel.refreshEpisodes()
+
+        coVerify(exactly = 1) { repository.getEpisodes(1, any()) }
+        advanceUntilIdle()
+        coVerify(exactly = 2) { repository.getEpisodes(1, any()) }
     }
 
     @Test

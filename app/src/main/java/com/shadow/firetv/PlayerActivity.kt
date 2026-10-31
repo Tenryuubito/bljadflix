@@ -577,9 +577,13 @@ class PlayerActivity : AppCompatActivity() {
         return true
     }
 
+    override fun onPause() {
+        super.onPause()
+        viewModel.saveProgress()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
-        viewModel.onPlayerDestroy()
         pollJob?.cancel()
         hideHandler.removeCallbacksAndMessages(null)
         seekIndicatorHandler.removeCallbacksAndMessages(null)

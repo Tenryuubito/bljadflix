@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.shadow.firetv.core.data.MovieRepository
 import com.shadow.firetv.core.data.MovieRepositoryImpl
+import com.shadow.firetv.core.data.ProgressSync
 import com.shadow.firetv.core.model.Episode
 import com.shadow.firetv.core.model.ProgressRequest
 import com.shadow.firetv.core.model.StreamResponse
@@ -70,7 +71,8 @@ sealed interface PlayerEvent {
 class PlayerViewModel(
     private val repository: MovieRepository,
     private val hosterLinkResolver: HosterLinkResolver = HosterLinkResolver(),
-    private val sourceManager: SourceManager = SourceManager.getInstance()
+    private val sourceManager: SourceManager = SourceManager.getInstance(),
+    private val progressSync: ProgressSync = ProgressSync.shared
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlayerUiState())
@@ -82,6 +84,7 @@ class PlayerViewModel(
     private var pollCount = 0
     private var resumeHandled = false
     private var resumeWaitPolls = 0
+    private var pendingResumeTarget: Float? = null
     private var countdownJob: Job? = null
     private var streamJob: Job? = null
 
@@ -124,6 +127,7 @@ class PlayerViewModel(
         pollCount = 0
         resumeHandled = false
         resumeWaitPolls = 0
+        pendingResumeTarget = null
         _uiState.update {
             it.copy(
                 episodeId = episodeId,
@@ -217,11 +221,12 @@ class PlayerViewModel(
         if (duration <= 0) return
 
         if (!resumeHandled) handleResume(currentTime, duration)
+        pendingResumeTarget?.let { if (currentTime >= it - RESUME_TOLERANCE_SECONDS) pendingResumeTarget = null }
 
         val isCompleted = isEnded || (currentTime >= duration * COMPLETION_RATIO)
         if (isCompleted && !state.isCompletedMarked) {
             _uiState.update { it.copy(isCompletedMarked = true) }
-            sendProgress(newMaxProgress, duration, isCompleted = true)
+            sendProgress(currentTime, duration, isCompleted = true)
         }
 
         val remaining = duration - currentTime
@@ -239,11 +244,11 @@ class PlayerViewModel(
             return
         }
 
-        if (!isEnded && resumeHandled) {
+        if (!isEnded && !isPaused && resumeHandled) {
             pollCount++
-            if (pollCount >= 20 && state.contentId != -1) {
+            if (pollCount >= PROGRESS_POLL_INTERVAL) {
                 pollCount = 0
-                sendProgress(newMaxProgress, duration, _uiState.value.isCompletedMarked)
+                saveProgress()
             }
         }
     }
@@ -256,9 +261,10 @@ class PlayerViewModel(
         val episode = state.currentEpisode ?: return
         val saved = episode.progress_seconds
         if (episode.is_completed || saved < MIN_RESUME_SECONDS || saved >= duration * COMPLETION_RATIO) return
-        if (currentTime >= saved - 5f) return
+        if (currentTime >= saved - RESUME_TOLERANCE_SECONDS) return
 
         val target = (saved - RESUME_REWIND_SECONDS).coerceAtLeast(0f)
+        pendingResumeTarget = target
         viewModelScope.launch { _events.emit(PlayerEvent.SeekTo(target, isResume = true)) }
     }
 
@@ -319,11 +325,8 @@ class PlayerViewModel(
     }
 
     private fun switchToEpisode(target: Episode) {
-        val state = _uiState.value
-        if (state.isTransitioning) return
-        if (resumeHandled && state.maxProgress > 0 && state.duration > 0) {
-            sendProgress(state.maxProgress, state.duration, state.isCompletedMarked)
-        }
+        if (_uiState.value.isTransitioning) return
+        saveProgress()
         loadStream(target.id)
     }
 
@@ -341,7 +344,7 @@ class PlayerViewModel(
             })
         }
 
-        viewModelScope.launch {
+        progressSync.launch {
             val req = ProgressRequest(
                 episode_id = state.episodeId,
                 content_id = state.contentId,
@@ -354,11 +357,12 @@ class PlayerViewModel(
         }
     }
 
-    fun onPlayerDestroy() {
+    fun saveProgress() {
         val state = _uiState.value
-        if (resumeHandled && state.contentId != -1 && !state.isTransitioning && state.maxProgress > 0 && state.duration > 0) {
-            sendProgress(state.maxProgress, state.duration, state.isCompletedMarked)
-        }
+        if (!resumeHandled || pendingResumeTarget != null) return
+        if (state.contentId == -1 || state.isTransitioning || state.isLoading || state.duration <= 0) return
+        if (!state.isCompletedMarked && state.currentTime < MIN_TRACK_SECONDS) return
+        sendProgress(state.currentTime, state.duration, state.isCompletedMarked)
     }
 
     companion object {
@@ -367,6 +371,9 @@ class PlayerViewModel(
         private const val MIN_RESUME_SECONDS = 10f
         private const val RESUME_REWIND_SECONDS = 3f
         private const val RESUME_WAIT_POLLS = 10
+        private const val RESUME_TOLERANCE_SECONDS = 5f
+        private const val MIN_TRACK_SECONDS = 10f
+        private const val PROGRESS_POLL_INTERVAL = 20
     }
 
     class Factory(private val repository: MovieRepository = MovieRepositoryImpl(RetrofitClient.instance)) :

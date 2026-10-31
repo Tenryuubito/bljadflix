@@ -227,6 +227,50 @@ class PlayerViewModelTest {
     }
 
     @Test
+    fun `saveProgress stores the current position after seeking back`() = runTest {
+        coEvery { repository.getEpisodes(1) } returns Result.success(mapOf("1" to listOf(Episode(10, 1, "Ep 1", ""))))
+        coEvery { repository.resolveStream(10) } returns Result.success(StreamResponse("http://stream.m3u8", emptyMap()))
+
+        viewModel.initPlayer(contentId = 1, episodeId = 10)
+        viewModel.updateProgressState(currentTime = 300f, duration = 1400f, isPaused = false, isEnded = false)
+        viewModel.updateProgressState(currentTime = 120f, duration = 1400f, isPaused = false, isEnded = false)
+        viewModel.saveProgress()
+
+        coVerify {
+            repository.updateProgress(match { it.episode_id == 10 && it.progress_seconds == 120f && !it.is_completed })
+        }
+    }
+
+    @Test
+    fun `saveProgress ignores very short views`() = runTest {
+        coEvery { repository.getEpisodes(1) } returns Result.success(mapOf("1" to listOf(Episode(10, 1, "Ep 1", ""))))
+        coEvery { repository.resolveStream(10) } returns Result.success(StreamResponse("http://stream.m3u8", emptyMap()))
+
+        viewModel.initPlayer(contentId = 1, episodeId = 10)
+        viewModel.updateProgressState(currentTime = 4f, duration = 1400f, isPaused = false, isEnded = false)
+        viewModel.saveProgress()
+
+        coVerify(exactly = 0) { repository.updateProgress(any()) }
+    }
+
+    @Test
+    fun `saveProgress waits until the resume seek has landed`() = runTest {
+        coEvery { repository.getEpisodes(1) } returns Result.success(
+            mapOf("1" to listOf(Episode(10, 1, "Ep 1", "", progress_seconds = 600f, duration_seconds = 1400f)))
+        )
+        coEvery { repository.resolveStream(10) } returns Result.success(StreamResponse("http://stream.m3u8", emptyMap()))
+
+        viewModel.initPlayer(contentId = 1, episodeId = 10)
+        viewModel.updateProgressState(currentTime = 12f, duration = 1400f, isPaused = false, isEnded = false)
+        viewModel.saveProgress()
+        coVerify(exactly = 0) { repository.updateProgress(any()) }
+
+        viewModel.updateProgressState(currentTime = 598f, duration = 1400f, isPaused = false, isEnded = false)
+        viewModel.saveProgress()
+        coVerify { repository.updateProgress(match { it.progress_seconds == 598f }) }
+    }
+
+    @Test
     fun `updateProgressState tracks max progress and triggers completion`() = runTest {
         val streamResponse = StreamResponse("http://stream.m3u8", emptyMap())
         coEvery { repository.getEpisodes(1) } returns Result.success(emptyMap())

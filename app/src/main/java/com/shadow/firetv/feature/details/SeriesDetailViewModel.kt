@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.shadow.firetv.core.data.MovieRepository
 import com.shadow.firetv.core.data.MovieRepositoryImpl
+import com.shadow.firetv.core.data.ProgressSync
 import com.shadow.firetv.core.model.Episode
 import com.shadow.firetv.core.model.WatchlistRequest
 import com.shadow.firetv.core.network.RetrofitClient
@@ -42,7 +43,8 @@ sealed interface SeriesDetailEvent {
 }
 
 class SeriesDetailViewModel(
-    private val repository: MovieRepository
+    private val repository: MovieRepository,
+    private val progressSync: ProgressSync = ProgressSync.shared
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SeriesDetailUiState())
@@ -118,6 +120,7 @@ class SeriesDetailViewModel(
         val contentId = _uiState.value.contentId
         if (contentId == -1 || _uiState.value.isLoading) return
         viewModelScope.launch {
+            progressSync.awaitPending()
             repository.getEpisodes(contentId, _uiState.value.source)
                 .onSuccess { seasonsMap ->
                     if (seasonsMap.isNotEmpty()) processLoadedEpisodes(seasonsMap, keepSelectedSeason = true)

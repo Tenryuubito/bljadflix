@@ -143,6 +143,29 @@ class MainViewModelTest {
     }
 
     @Test
+    fun `refreshing continue watching shows the newly watched episode`() = runTest {
+        val before = ContinueWatchingItem(
+            id = 1, title = "Show", description = "Desc", cover_url = "cover", genre = "Action",
+            episode_id = 10, season_number = 1, episode_number = 1, episode_title = "Pilot",
+            progress_seconds = 100f, duration_seconds = 1000f
+        )
+        val after = before.copy(episode_id = 11, episode_number = 2, episode_title = "Zwei", progress_seconds = 0f)
+        coEvery { repository.getContinueWatching() } returns Result.success(listOf(before))
+
+        advanceUntilIdle()
+        viewModel.selectSidebarIndex(0)
+        advanceUntilIdle()
+        assertEquals(listOf(before), viewModel.uiState.value.continueWatchingItems)
+
+        coEvery { repository.getContinueWatching() } returns Result.success(listOf(after))
+        viewModel.refreshContinueWatching()
+        advanceUntilIdle()
+
+        assertEquals(listOf(after), viewModel.uiState.value.continueWatchingItems)
+        assertFalse(viewModel.uiState.value.isLoading)
+    }
+
+    @Test
     fun `search query updates search mode and returns matching movies`() = runTest {
         val searchResults = listOf(Movie(5, "Spider-Man", "Desc", "url", "pageUrl", "Action"))
         coEvery { repository.searchMovies("Spider", null, 1, 20) } returns Result.success(searchResults)

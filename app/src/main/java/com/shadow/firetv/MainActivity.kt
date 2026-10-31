@@ -30,6 +30,7 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.SimpleItemAnimator
 import com.shadow.firetv.core.model.ContinueWatchingItem
 import com.shadow.firetv.core.model.MainAppVersion
+import com.shadow.firetv.core.theme.AppTheme
 import com.shadow.firetv.core.theme.ThemeManager
 import com.shadow.firetv.feature.auth.LoginActivity
 import com.shadow.firetv.feature.main.MainEvent
@@ -75,6 +76,7 @@ class MainActivity : AppCompatActivity() {
     private var renderedScrollKey: String? = null
     private var pendingScrollRestore: Int? = null
     private var pendingSearchFocus = false
+    private var appliedTheme: AppTheme? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -135,16 +137,23 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        ThemeManager.getInstance(this).applyTheme(this)
-        if (::sidebarAdapter.isInitialized) {
-            if (rvSidebarCategories.isComputingLayout) {
-                rvSidebarCategories.post { sidebarAdapter.notifyDataSetChanged() }
-            } else {
-                sidebarAdapter.notifyDataSetChanged()
+        val themeManager = ThemeManager.getInstance(this)
+        val theme = themeManager.getSelectedTheme()
+        if (theme != appliedTheme) {
+            val isThemeChange = appliedTheme != null
+            appliedTheme = theme
+            themeManager.applyTheme(this)
+            if (isThemeChange && ::sidebarAdapter.isInitialized) {
+                if (rvSidebarCategories.isComputingLayout) {
+                    rvSidebarCategories.post { sidebarAdapter.notifyDataSetChanged() }
+                } else {
+                    sidebarAdapter.notifyDataSetChanged()
+                }
             }
         }
         viewModel.checkAuthStatus()
         viewModel.refreshState()
+        viewModel.refreshContinueWatching()
         updateViewModel.checkForUpdate()
     }
 

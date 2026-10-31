@@ -86,5 +86,76 @@ class TestContinueWatchingHide(unittest.TestCase):
         self.assertEqual(episodes[1][0]["progress_seconds"], 120.0)
 
 
+class TestContinueWatchingEpisode(unittest.TestCase):
+
+    USER_ID = 4343
+
+    def setUp(self):
+        self.service = app_backend.content_service
+        with app_backend.db.get_content_connection("sto") as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO content_index (title, description, cover_url, source_page_url, genre) VALUES (?, ?, ?, ?, ?)",
+                ("Serie", "Beschreibung", "", f"https://example.test/serie/{time.time_ns()}", "Drama")
+            )
+            self.content_id = cursor.lastrowid
+            self.episode_ids = []
+            for season, number in ((1, 1), (1, 2), (2, 1)):
+                cursor.execute(
+                    "INSERT INTO episodes (content_id, season_number, episode_number, title, episode_url) VALUES (?, ?, ?, ?, ?)",
+                    (self.content_id, season, number, f"S{season}E{number}", f"u{season}{number}")
+                )
+                self.episode_ids.append(cursor.lastrowid)
+            conn.commit()
+
+    def tearDown(self):
+        with app_backend.db.get_user_connection() as conn:
+            conn.execute("DELETE FROM watch_progress WHERE user_id = ?", (self.USER_ID,))
+            conn.execute("DELETE FROM watch_logs WHERE user_id = ?", (self.USER_ID,))
+            conn.commit()
+
+    def _watch(self, index, progress, completed, at):
+        with patch("services.content_service.time.time", return_value=at):
+            self.service.update_progress(
+                user_id=self.USER_ID,
+                source="sto",
+                req=ProgressRequest(
+                    episode_id=self.episode_ids[index],
+                    content_id=self.content_id,
+                    progress_seconds=progress,
+                    duration_seconds=1400,
+                    is_completed=completed,
+                    source="sto"
+                )
+            )
+
+    def _continue_item(self):
+        items = self.service.get_continue_watching(user_id=self.USER_ID, source="sto")
+        return next(item for item in items if item["id"] == self.content_id)
+
+    def test_unfinished_episode_is_continued(self):
+        self._watch(0, 1400, True, 1000.0)
+        self._watch(1, 300, False, 2000.0)
+
+        item = self._continue_item()
+
+        self.assertEqual(item["episode_id"], self.episode_ids[1])
+        self.assertEqual(item["progress_seconds"], 300.0)
+
+    def test_finished_episode_continues_with_next_season(self):
+        self._watch(1, 1400, True, 1000.0)
+
+        self.assertEqual(self._continue_item()["episode_id"], self.episode_ids[2])
+
+    def test_rewatching_keeps_episode_completed(self):
+        self._watch(0, 1400, True, 1000.0)
+        self._watch(0, 200, False, 2000.0)
+
+        episodes = self.service.get_episodes(source="sto", content_id=self.content_id, user_id=self.USER_ID)
+
+        self.assertTrue(episodes[1][0]["is_completed"])
+        self.assertEqual(episodes[1][0]["progress_seconds"], 200.0)
+
+
 if __name__ == "__main__":
     unittest.main()
