@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -53,6 +54,7 @@ android {
     buildFeatures {
         viewBinding = true
         buildConfig = true
+        compose = true
     }
     // Sideload-App für Fire TV, nicht über Google Play verteilt: Die Play-Store-Vorgabe zum targetSdk gilt hier nicht.
     lint {
@@ -69,8 +71,18 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("androidx.fragment:fragment-ktx:1.6.2")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("androidx.activity:activity-compose:1.9.3")
+
+    implementation(platform("androidx.compose:compose-bom:2024.10.01"))
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.tv:tv-material:1.0.0")
+    implementation("com.github.bumptech.glide:compose:1.0.0-beta01")
+    debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.8")
