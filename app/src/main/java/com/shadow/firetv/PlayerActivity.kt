@@ -5,12 +5,14 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Message
 import android.os.SystemClock
 import android.text.TextUtils
 import android.view.KeyEvent
 import android.view.View
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -27,6 +29,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.shadow.firetv.core.model.Episode
+import com.shadow.firetv.core.stream.AdBlocker
 import com.shadow.firetv.core.theme.ThemeManager
 import com.shadow.firetv.feature.player.PlayerEvent
 import com.shadow.firetv.feature.player.PlayerUiState
@@ -35,6 +38,7 @@ import com.shadow.firetv.feature.player.SeekAccelerator
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.ByteArrayInputStream
 import java.util.Locale
 import kotlin.math.abs
 
@@ -97,6 +101,8 @@ class PlayerActivity : AppCompatActivity() {
     private var isPageLoading = false
     private var lastStreamToken = 0
     private var wasLoading = false
+    @Volatile
+    private var videoStarted = false
 
     private val viewModel: PlayerViewModel by viewModels { PlayerViewModel.Factory() }
 
@@ -151,17 +157,25 @@ class PlayerActivity : AppCompatActivity() {
             domStorageEnabled = true
             mediaPlaybackRequiresUserGesture = false
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            javaScriptCanOpenWindowsAutomatically = false
+            setSupportMultipleWindows(true)
         }
 
-        webView.webChromeClient = WebChromeClient()
-        webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message?): Boolean {
                 return false
             }
+        }
+        webView.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                if (!AdBlocker.isAdHost(request?.url?.host)) return null
+                return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
+            }
 
-            @Deprecated("Deprecated in Java")
-            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                return false
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                if (request == null || !request.isForMainFrame) return false
+                val currentHost = view?.url?.let { Uri.parse(it).host }
+                return AdBlocker.shouldBlockNavigation(currentHost, request.url.host, request.isRedirect, videoStarted)
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
@@ -191,6 +205,11 @@ class PlayerActivity : AppCompatActivity() {
 
                         var video = document.querySelector('video');
                         if (video) {
+                            Array.prototype.forEach.call(document.body.children, function(el) {
+                                if (el !== video && !el.contains(video) && el.tagName !== 'SCRIPT') {
+                                    el.style.setProperty('display', 'none', 'important');
+                                }
+                            });
                             if (!window.__vidEndedAttached) {
                                 video.addEventListener('ended', function() { window.__videoEnded = '1'; });
                                 window.__vidEndedAttached = true;
@@ -204,7 +223,7 @@ class PlayerActivity : AppCompatActivity() {
                             video.style.position = 'fixed';
                             video.style.top = '0';
                             video.style.left = '0';
-                            video.style.zIndex = '999999';
+                            video.style.zIndex = '2147483647';
                             video.style.background = 'black';
                         }
                     }, 500);
@@ -271,6 +290,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun renderState(state: PlayerUiState) {
         if (state.isLoading && !wasLoading) {
+            videoStarted = false
             pollJob?.cancel()
             webView.loadUrl(BLANK_PAGE)
         }
@@ -420,6 +440,7 @@ class PlayerActivity : AppCompatActivity() {
                             val duration = parts[1].toFloatOrNull()?.takeIf { !it.isNaN() && !it.isInfinite() } ?: 0f
                             val paused = parts[2] == "1"
                             val ended = parts[3] == "1"
+                            if (duration > 0f) videoStarted = true
 
                             viewModel.updateProgressState(currentTime, duration, paused, ended)
                         }
