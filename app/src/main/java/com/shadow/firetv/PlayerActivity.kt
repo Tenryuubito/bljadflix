@@ -9,6 +9,7 @@ import android.os.Message
 import android.os.SystemClock
 import android.text.TextUtils
 import android.view.KeyEvent
+import android.view.View
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -145,6 +146,10 @@ class PlayerActivity : AppCompatActivity() {
             override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message?): Boolean {
                 return false
             }
+
+            override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                callback?.onCustomViewHidden()
+            }
         }
         webView.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
@@ -162,53 +167,7 @@ class PlayerActivity : AppCompatActivity() {
                 if (url == BLANK_PAGE) return
                 isPageLoading.value = false
                 startPolling()
-                view?.evaluateJavascript(
-                    """
-                    if (!window.__bljadflixInjected) {
-                    window.__bljadflixInjected = true;
-                    setInterval(function() {
-                        window.open = function() { return null; };
-
-                        try {
-                            if (typeof jwplayer === 'function') {
-                                var p = jwplayer();
-                                if (!window.__jwEndedAttached) {
-                                    p.on('complete', function() { window.__videoEnded = '1'; });
-                                    window.__jwEndedAttached = true;
-                                }
-                                if (!window.__userHasPaused && p.getState && p.getState() !== 'playing') {
-                                    p.play();
-                                }
-                            }
-                        } catch(e) {}
-
-                        var video = document.querySelector('video');
-                        if (video) {
-                            Array.prototype.forEach.call(document.body.children, function(el) {
-                                if (el !== video && !el.contains(video) && el.tagName !== 'SCRIPT') {
-                                    el.style.setProperty('display', 'none', 'important');
-                                }
-                            });
-                            if (!window.__vidEndedAttached) {
-                                video.addEventListener('ended', function() { window.__videoEnded = '1'; });
-                                window.__vidEndedAttached = true;
-                            }
-                            if (!window.__userHasPaused && video.paused) {
-                                video.play().catch(function(){});
-                            }
-
-                            video.style.width = '100vw';
-                            video.style.height = '100vh';
-                            video.style.position = 'fixed';
-                            video.style.top = '0';
-                            video.style.left = '0';
-                            video.style.zIndex = '2147483647';
-                            video.style.background = 'black';
-                        }
-                    }, 500);
-                    }
-                """.trimIndent(), null
-                )
+                view?.evaluateJavascript(INJECTED_JS, null)
             }
         }
     }
@@ -293,8 +252,9 @@ class PlayerActivity : AppCompatActivity() {
                     """
                     (function() {
                         var ended = window.__videoEnded || '0';
-                        var v = document.querySelector('video');
-                        if (v) return v.currentTime + ',' + v.duration + ',' + (v.paused ? '1' : '0') + ',' + ended;
+                        var v = $ACTIVE_VIDEO_JS;
+                        var videoState = v ? v.currentTime + ',' + v.duration + ',' + (v.paused ? '1' : '0') + ',' + ended : '';
+                        if (v && v.duration > 0) return videoState;
                         try {
                             if (typeof jwplayer === 'function') {
                                 var p = jwplayer();
@@ -303,7 +263,7 @@ class PlayerActivity : AppCompatActivity() {
                                 }
                             }
                         } catch(e) {}
-                        return '';
+                        return videoState;
                     })();
                 """.trimIndent()
                 ) { result ->
@@ -336,7 +296,7 @@ class PlayerActivity : AppCompatActivity() {
                         if (p.seek) p.seek(t);
                     }
                 } catch(e) {}
-                var v = document.querySelector('video');
+                var v = $ACTIVE_VIDEO_JS;
                 if (v) v.currentTime = t;
             })($target);
         """.trimIndent(), null
@@ -347,7 +307,7 @@ class PlayerActivity : AppCompatActivity() {
         webView.evaluateJavascript(
             """
             window.__userHasPaused = true;
-            var v = document.querySelector('video');
+            var v = $ACTIVE_VIDEO_JS;
             if (v) v.pause();
             try {
                 if (!v && typeof jwplayer === 'function') jwplayer().pause(true);
@@ -360,7 +320,7 @@ class PlayerActivity : AppCompatActivity() {
         webView.evaluateJavascript(
             """
             window.__userHasPaused = true;
-            var v = document.querySelector('video');
+            var v = $ACTIVE_VIDEO_JS;
             if (v) { if (v.paused) v.play(); else v.pause(); }
             try {
                 if (!v && typeof jwplayer === 'function') {
@@ -479,6 +439,113 @@ class PlayerActivity : AppCompatActivity() {
         private const val DPAD_SEEK_SECONDS = 10
         private const val MEDIA_SEEK_SECONDS = 30
         private const val SEEK_APPLY_DELAY_MS = 500L
+
+        private const val ACTIVE_VIDEO_JS =
+            "(window.__bljadflixVideo ? window.__bljadflixVideo() : document.querySelector('video'))"
+
+        private val INJECTED_JS = """
+            if (!window.__bljadflixInjected) {
+            window.__bljadflixInjected = true;
+            window.open = function() { return null; };
+
+            var noFullscreen = function() { return Promise.resolve(); };
+            ['requestFullscreen', 'webkitRequestFullscreen', 'webkitRequestFullScreen'].forEach(function(name) {
+                try { Element.prototype[name] = noFullscreen; } catch(e) {}
+            });
+            ['webkitEnterFullscreen', 'webkitEnterFullScreen'].forEach(function(name) {
+                try { HTMLVideoElement.prototype[name] = function() {}; } catch(e) {}
+            });
+
+            window.__bljadflixVideo = function() {
+                var videos = document.querySelectorAll('video');
+                var best = null;
+                var bestScore = -1;
+                for (var i = 0; i < videos.length; i++) {
+                    var v = videos[i];
+                    var score = (v.videoWidth > 0 ? 8 : 0) + (v.readyState >= 2 ? 4 : 0) + (v.paused ? 0 : 2) + (v === window.__bljadflixActive ? 1 : 0);
+                    if (score > bestScore) { best = v; bestScore = score; }
+                }
+                return best;
+            };
+
+            var VIDEO_PROPS = ['display', 'visibility', 'opacity', 'width', 'height', 'position', 'top', 'left', 'z-index', 'background', 'object-fit', 'transform'];
+            var ANCESTOR_PROPS = ['transform', 'filter', 'perspective', 'contain', 'will-change', 'opacity', 'visibility'];
+
+            var releaseVideo = function(v) {
+                VIDEO_PROPS.forEach(function(p) { v.style.removeProperty(p); });
+                for (var a = v.parentElement; a && a !== document.body && a !== document.documentElement; a = a.parentElement) {
+                    ANCESTOR_PROPS.forEach(function(p) { a.style.removeProperty(p); });
+                }
+            };
+
+            var showVideo = function(video) {
+                Array.prototype.forEach.call(document.body.children, function(el) {
+                    var keep = el === video || el.contains(video);
+                    if (keep && el.hasAttribute('data-bljadflix-hidden')) {
+                        el.removeAttribute('data-bljadflix-hidden');
+                        el.style.removeProperty('display');
+                    } else if (!keep && el.tagName !== 'SCRIPT' && !el.hasAttribute('data-bljadflix-hidden')) {
+                        el.setAttribute('data-bljadflix-hidden', '1');
+                        el.style.setProperty('display', 'none', 'important');
+                    }
+                });
+                for (var a = video.parentElement; a && a !== document.body && a !== document.documentElement; a = a.parentElement) {
+                    a.style.setProperty('transform', 'none', 'important');
+                    a.style.setProperty('filter', 'none', 'important');
+                    a.style.setProperty('perspective', 'none', 'important');
+                    a.style.setProperty('contain', 'none', 'important');
+                    a.style.setProperty('will-change', 'auto', 'important');
+                    a.style.setProperty('opacity', '1', 'important');
+                    a.style.setProperty('visibility', 'visible', 'important');
+                }
+                video.style.setProperty('display', 'block', 'important');
+                video.style.setProperty('visibility', 'visible', 'important');
+                video.style.setProperty('opacity', '1', 'important');
+                video.style.setProperty('width', '100vw', 'important');
+                video.style.setProperty('height', '100vh', 'important');
+                video.style.setProperty('position', 'fixed', 'important');
+                video.style.setProperty('top', '0', 'important');
+                video.style.setProperty('left', '0', 'important');
+                video.style.setProperty('z-index', '2147483647', 'important');
+                video.style.setProperty('background', 'black', 'important');
+                video.style.setProperty('object-fit', 'contain', 'important');
+                video.style.setProperty('transform', 'none', 'important');
+            };
+
+            setInterval(function() {
+                window.open = function() { return null; };
+
+                try {
+                    if (typeof jwplayer === 'function') {
+                        var p = jwplayer();
+                        if (!window.__jwEndedAttached) {
+                            p.on('complete', function() { window.__videoEnded = '1'; });
+                            window.__jwEndedAttached = true;
+                        }
+                        if (!window.__userHasPaused && p.getState && p.getState() !== 'playing') {
+                            p.play();
+                        }
+                    }
+                } catch(e) {}
+
+                var video = window.__bljadflixVideo();
+                if (!video) return;
+                if (!video.__bljadflixEnded) {
+                    video.addEventListener('ended', function() { window.__videoEnded = '1'; });
+                    video.__bljadflixEnded = true;
+                }
+                if (!window.__userHasPaused && video.paused) {
+                    var played = video.play();
+                    if (played && played.catch) played.catch(function(){});
+                }
+                if (video.readyState < 1 && video.videoWidth === 0) return;
+                var previous = window.__bljadflixActive;
+                if (previous && previous !== video) releaseVideo(previous);
+                window.__bljadflixActive = video;
+                showVideo(video);
+            }, 500);
+            }
+        """.trimIndent()
 
         private val HANDLED_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_CENTER,
