@@ -44,7 +44,7 @@ private fun backgroundColors(theme: AppTheme): Pair<Color, Color> = when (theme)
     AppTheme.GOLD_ROYAL -> Color(0xFF2A1E08) to Color(0xFF0C0802)
 }
 
-private fun primaryColor(theme: AppTheme): Color = when (theme) {
+fun themeAccentColor(theme: AppTheme): Color = when (theme) {
     AppTheme.CLASSIC_DARK -> Color(0xFF9A9AB0)
     else -> Color(android.graphics.Color.parseColor(theme.primaryColorHex))
 }
@@ -82,7 +82,7 @@ fun rememberSelectedTheme(): AppTheme {
 fun BljadflixTheme(theme: AppTheme = rememberSelectedTheme(), content: @Composable () -> Unit) {
     val (top, bottom) = backgroundColors(theme)
     val colorScheme = darkColorScheme(
-        primary = primaryColor(theme),
+        primary = themeAccentColor(theme),
         onPrimary = onPrimaryColor(theme),
         secondary = BljadflixColors.SurfaceFocused,
         onSecondary = BljadflixColors.TextPrimary,

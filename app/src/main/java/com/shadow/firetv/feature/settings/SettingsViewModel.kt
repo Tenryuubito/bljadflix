@@ -37,7 +37,6 @@ data class SettingsUiState(
 sealed interface SettingsEvent {
     data class ShowToast(val message: String) : SettingsEvent
     object NavigateToLogin : SettingsEvent
-    data class ThemeChanged(val theme: AppTheme) : SettingsEvent
 }
 
 class SettingsViewModel(
@@ -94,7 +93,6 @@ class SettingsViewModel(
         themeManager.setSelectedTheme(theme)
         _uiState.update { it.copy(selectedTheme = theme) }
         viewModelScope.launch {
-            _events.emit(SettingsEvent.ThemeChanged(theme))
             _events.emit(SettingsEvent.ShowToast("Theme gewechselt: ${theme.displayName}"))
         }
     }
