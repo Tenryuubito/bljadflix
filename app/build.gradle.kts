@@ -54,6 +54,10 @@ android {
         viewBinding = true
         buildConfig = true
     }
+    // Sideload-App für Fire TV, nicht über Google Play verteilt: Die Play-Store-Vorgabe zum targetSdk gilt hier nicht.
+    lint {
+        disable += "ExpiredTargetSdkVersion"
+    }
 }
 
 dependencies {
